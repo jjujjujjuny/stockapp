@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>내 포트폴리오 📊</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:       #f0f4f8;
+  --card:     #ffffff;
+  --primary:  #4f46e5;
+  --pri-bg:   #ede9fe;
+  --text:     #1e293b;
+  --muted:    #64748b;
+  --border:   #e2e8f0;
+  --green:    #10b981;
+  --red:      #ef4444;
+  --yellow:   #f59e0b;
+  --radius:   14px;
+  --shadow:   0 2px 8px rgba(0,0,0,0.07);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Noto Sans KR', sans-serif;
+  background: var(--bg); color: var(--text);
+  min-height: 100vh; -webkit-font-smoothing: antialiased;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.header {
+  position: sticky; top: 0; z-index: 50;
+  background: var(--card); border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header h1 { font-size: 17px; font-weight: 700; }
+.header-right { display: flex; align-items: center; gap: 8px; }
+.refresh-btn {
+  background: none; border: none; font-size: 20px;
+  cursor: pointer; padding: 4px; border-radius: 50%; line-height: 1;
+  transition: background 0.15s;
+}
+.refresh-btn:active { background: var(--bg); }
+.last-updated { font-size: 11px; color: var(--muted); }
+
+/* ── Tab bar ─────────────────────────────────────────────────── */
+.tab-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  background: var(--card); border-top: 1px solid var(--border);
+  display: flex; padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.tab-btn {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; padding: 8px 2px 6px;
+  cursor: pointer; color: var(--muted);
+  font-size: 10px; gap: 2px;
+  border: none; background: none; transition: color 0.15s;
+}
+.tab-btn.active { color: var(--primary); }
+.tab-icon { font-size: 22px; line-height: 1; }
+
+/* ── Pages ───────────────────────────────────────────────────── */
+.page { display: none; padding: 16px; padding-bottom: 90px; max-width: 520px; margin: 0 auto; }
+.page.active { display: block; }
+
+/* ── Cards ───────────────────────────────────────────────────── */
+.card { background: var(--card); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow); }
+.card-label { font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+.card-value { font-size: 26px; font-weight: 800; color: var(--text); }
+.card-sub   { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+.total-card { background: linear-gradient(135deg, #4f46e5, #7c3aed); }
+.total-card .card-label { color: rgba(255,255,255,0.7); }
+.total-card .card-value { color: #fff; font-size: 30px; }
+.total-card .card-sub   { color: rgba(255,255,255,0.75); }
+
+/* ── Chart ───────────────────────────────────────────────────── */
+.chart-wrap { position: relative; height: 200px; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 12px; }
+.legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+.legend-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── Asset list ──────────────────────────────────────────────── */
+.asset-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 0; border-bottom: 1px solid var(--border);
+}
+.asset-item:last-child { border-bottom: none; }
+.asset-dot   { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.asset-info  { flex: 1; min-width: 0; }
+.asset-name  { font-size: 13px; font-weight: 700; line-height: 1.3; }
+.asset-meta  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.asset-right { text-align: right; flex-shrink: 0; }
+.asset-value { font-size: 14px; font-weight: 700; }
+.asset-pct   { font-size: 11px; margin-top: 2px; }
+
+.badge-usd { display:inline-block; font-size:9px; font-weight:700; background:#dbeafe; color:#1d4ed8; padding:1px 5px; border-radius:4px; margin-left:4px; vertical-align:middle; }
+
+/* ── Progress bars ───────────────────────────────────────────── */
+.progress-row   { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.progress-label { font-size: 11px; color: var(--muted); width: 80px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.progress-wrap  { flex: 1; background: var(--border); border-radius: 4px; height: 8px; position: relative; overflow: visible; }
+.progress-fill  { height: 100%; border-radius: 4px; transition: width 0.5s; }
+.progress-tick  { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #1e293b; border-radius: 2px; }
+.progress-pct   { font-size: 10px; width: 50px; text-align: right; flex-shrink: 0; color: var(--muted); }
+
+/* ── Section title ───────────────────────────────────────────── */
+.section-title { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+
+/* ── Divider ─────────────────────────────────────────────────── */
+.divider { height: 1px; background: var(--border); margin: 10px 0; }
+
+/* ── Dividend ────────────────────────────────────────────────── */
+.div-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.div-row:last-child { border-bottom: none; }
+.div-row-label { font-size: 13px; font-weight: 600; }
+.div-row-sub   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.div-amount    { font-size: 15px; font-weight: 700; color: var(--green); }
+
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.two-col .card { margin-bottom: 0; }
+
+/* ── Rebalancer ──────────────────────────────────────────────── */
+.input-group  { margin-bottom: 14px; }
+.input-label  { font-size: 13px; color: var(--muted); margin-bottom: 6px; display: block; font-weight: 500; }
+.num-input {
+  width: 100%; padding: 12px; font-size: 16px;
+  border: 1.5px solid var(--border); border-radius: 10px;
+  outline: none; color: var(--text); background: var(--card);
+  transition: border-color 0.15s;
+}
+.num-input:focus { border-color: var(--primary); }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.preset-btn {
+  padding: 5px 12px; border: 1.5px solid var(--border);
+  border-radius: 20px; font-size: 12px; cursor: pointer;
+  background: var(--card); color: var(--text); transition: all 0.1s;
+}
+.preset-btn:active, .preset-btn.sel { background: var(--pri-bg); border-color: var(--primary); color: var(--primary); }
+
+.rb-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rb-table th { text-align: left; padding: 8px 4px; color: var(--muted); font-weight: 600; font-size: 11px; border-bottom: 2px solid var(--border); }
+.rb-table td { padding: 10px 4px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.rb-table tr:last-child td { border-bottom: none; }
+.shares-buy  { font-size: 18px; font-weight: 800; color: var(--primary); }
+.shares-zero { color: var(--muted); }
+
+.summary-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; }
+.summary-label { font-size: 13px; color: var(--muted); }
+.summary-value { font-size: 14px; font-weight: 700; }
+
+/* ── Goal ────────────────────────────────────────────────────── */
+.goal-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.goal-row:last-child { border-bottom: none; }
+.goal-label { font-size: 13px; color: var(--muted); }
+.goal-value { font-size: 14px; font-weight: 700; }
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+.btn {
+  width: 100%; padding: 14px; border: none; border-radius: 12px;
+  font-size: 15px; font-weight: 700; cursor: pointer;
+  transition: opacity 0.1s, transform 0.1s;
+}
+.btn:active  { opacity: 0.85; transform: scale(0.98); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-success { background: var(--green); color: #fff; }
+.btn-outline { background: #fff; color: var(--primary); border: 2px solid var(--primary); }
+
+/* ── Settings ────────────────────────────────────────────────── */
+.text-input {
+  width: 100%; padding: 12px; font-size: 13px;
+  border: 1.5px solid var(--border); border-radius: 10px;
+  outline: none; color: var(--text); font-family: inherit;
+  transition: border-color 0.15s;
+}
+.text-input:focus { border-color: var(--primary); }
+.settings-section { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 10px; }
+.div-setting-row { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.div-setting-row:last-child { border-bottom: none; }
+.div-setting-name { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+.div-setting-sub  { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+.div-setting-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.small-input {
+  padding: 8px; border: 1.5px solid var(--border); border-radius: 8px;
+  font-size: 14px; outline: none; width: 100%;
+  transition: border-color 0.15s;
+}
+.small-input:focus { border-color: var(--primary); }
+.month-checks { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.month-checks label { display: flex; align-items: center; gap: 3px; font-size: 11px; cursor: pointer; }
+
+/* ── Loading / Error ─────────────────────────────────────────── */
+.center-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px; gap: 14px; text-align: center; color: var(--muted); }
+.spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.error-icon { font-size: 40px; }
+
+/* ── Toast ───────────────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 90px; left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: #1e293b; color: #fff;
+  padding: 10px 20px; border-radius: 24px; font-size: 14px;
+  opacity: 0; transition: all 0.25s; z-index: 200;
+  white-space: nowrap; pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── Exchange rate bar ───────────────────────────────────────── */
+.rate-bar { background: #dbeafe; color: #1d4ed8; font-size: 12px; font-weight: 600; padding: 6px 16px; text-align: center; }
+
+/* ── Pct colors ──────────────────────────────────────────────── */
+.ok     { color: var(--green); }
+.over   { color: var(--yellow); }
+.under  { color: var(--red); }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <header class="header">
+    <h1>내 포트폴리오 📊</h1>
+    <div class="header-right">
+      <span class="last-updated" id="last-updated">-</span>
+      <button class="refresh-btn" id="refresh-btn" title="새로고침">🔄</button>
+    </div>
+  </header>
+
+  <!-- USD/KRW rate bar (hidden until loaded) -->
+  <div class="rate-bar hidden" id="rate-bar"></div>
+
+  <!-- Pages -->
+  <div id="page-home"      class="page active"></div>
+  <div id="page-dividend"  class="page"></div>
+  <div id="page-rebalance" class="page"></div>
+  <div id="page-goal"      class="page"></div>
+  <div id="page-settings"  class="page"></div>
+
+  <!-- Tab bar -->
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-page="home">     <span class="tab-icon">📊</span><span>홈</span></button>
+    <button class="tab-btn"        data-page="dividend">  <span class="tab-icon">💰</span><span>배당</span></button>
+    <button class="tab-btn"        data-page="rebalance"><span class="tab-icon">⚖️</span><span>리밸런싱</span></button>
+    <button class="tab-btn"        data-page="goal">      <span class="tab-icon">🎯</span><span>목표</span></button>
+    <button class="tab-btn"        data-page="settings">  <span class="tab-icon">⚙️</span><span>설정</span></button>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// Constants
+// ════════════════════════════════════════════════════════════════
+const COLORS = ['#FFB800','#3B82F6','#10B981','#F97316','#8B5CF6'];
+
+// ════════════════════════════════════════════════════════════════
+// State
+// ════════════════════════════════════════════════════════════════
+let S = {
+  gasUrl:    localStorage.getItem('gasUrl') || '',
+  portfolio: null,
+  loading:   false,
+  error:     null,
+};
+let pieChart     = null;
+let rebalancePlan = null;
+
+// ════════════════════════════════════════════════════════════════
+// Utilities
+// ════════════════════════════════════════════════════════════════
+const $   = id => document.getElementById(id);
+const krw = n  => Math.round(n).toLocaleString('ko-KR') + '원';
+const krwC = n => {
+  if (n >= 1e8) return (n / 1e8).toFixed(2) + '억원';
+  if (n >= 1e4) return Math.floor(n / 1e4).toLocaleString() + '만원';
+  return krw(n);
+};
+const pct = n => n.toFixed(1) + '%';
+
+function fmtDate(iso) {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function pctClass(cur, tgt) {
+  const d = Math.abs(cur - tgt);
+  return d <= 2 ? 'ok' : d <= 5 ? 'over' : 'under';
+}
+function showToast(msg, ms = 2500) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), ms);
+}
+
+// ════════════════════════════════════════════════════════════════
+// API
+// ════════════════════════════════════════════════════════════════
+async function gasGet(action, data = null) {
+  if (!S.gasUrl) throw new Error('GAS URL이 설정되지 않았습니다.');
+  let url = S.gasUrl + '?action=' + action;
+  if (data) url += '&data=' + encodeURIComponent(JSON.stringify(data));
+  const res  = await fetch(url, { redirect: 'follow' });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || '서버 오류');
+  return json.data;
+}
+
+async function fetchPortfolio() {
+  if (S.loading) return;
+  S.loading = true;
+  S.error   = null;
+  renderHome();
+  try {
+    S.portfolio = await gasGet('getPortfolio');
+    $('last-updated').textContent = fmtDate(S.portfolio.last_updated);
+    // USD/KRW 환율 표시
+    const rateBar = $('rate-bar');
+    if (S.portfolio.usdkrw) {
+      rateBar.textContent = `💱 USD/KRW ${S.portfolio.usdkrw.toLocaleString('ko-KR')}원 (실시간)`;
+      rateBar.classList.remove('hidden');
+    } else {
+      rateBar.classList.add('hidden');
+    }
+  } catch (e) {
+    S.error = e.message;
+  } finally {
+    S.loading = false;
+  }
+  renderAll();
+}
+
+// ════════════════════════════════════════════════════════════════
+// Tab navigation
+// ════════════════════════════════════════════════════════════════
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    $('page-' + btn.dataset.page).classList.add('active');
+  });
+});
+$('refresh-btn').addEventListener('click', () => { if (!S.loading) fetchPortfolio(); });
+
+// ════════════════════════════════════════════════════════════════
+// Render all
+// ════════════════════════════════════════════════════════════════
+function renderAll() {
+  renderHome();
+  renderDividend();
+  renderRebalanceForm();
+  renderGoalForm();
+  renderSettings();
+}
+
+// ════════════════════════════════════════════════════════════════
+// HOME
+// ════════════════════════════════════════════════════════════════
+function renderHome() {
+  const el = $('page-home');
+
+  if (S.loading) {
+    el.innerHTML = `<div class="center-state"><div class="spinner"></div><span>실시간 데이터 조회 중...</span></div>`;
+    return;
+  }
+  if (S.error || !S.portfolio) {
+    if (!S.gasUrl) {
+      el.innerHTML = `<div class="center-state">
+        <div class="error-icon">⚙️</div>
+        <p><strong>설정</strong> 탭에서 GAS URL을 먼저 입력해주세요.</p>
+        <button class="btn btn-primary" style="width:auto;padding:10px 24px" onclick="document.querySelector('[data-page=settings]').click()">설정으로 이동</button>
+      </div>`;
+    } else {
+      el.innerHTML = `<div class="center-state">
+        <div class="error-icon">⚠️</div>
+        <p>${S.error || '데이터를 불러오지 못했습니다.'}</p>
+        <button class="btn btn-outline" style="width:auto;padding:10px 24px;margin-top:8px" onclick="fetchPortfolio()">다시 시도</button>
+      </div>`;
+    }
+    return;
+  }
+
+  const { assets, total_value } = S.portfolio;
+  const hasAnyUSD = assets.some(a => a.currency === 'USD');
+
+  let html = `
+    <!-- 총 자산 -->
+    <div class="card total-card">
+      <div class="card-label">총 평가 자산 (원화 환산)</div>
+      <div class="card-value">${krw(total_value)}</div>
+      <div class="card-sub">${assets.length}개 종목${hasAnyUSD ? ' · USD 자산 포함' : ''}</div>
+    </div>
+
+    <!-- 파이 차트 -->
+    <div class="card">
+      <div class="card-label" style="margin-bottom:12px">포트폴리오 구성 (바깥: 현재 / 안: 목표)</div>
+      <div class="chart-wrap"><canvas id="pie-chart"></canvas></div>
+      <div class="chart-legend" id="chart-legend"></div>
+    </div>
+
+    <!-- 보유 종목 -->
+    <div class="card">
+      <div class="section-title">보유 종목</div>`;
+
+  assets.forEach((a, i) => {
+    const diff     = a.current_pct - a.target_pct;
+    const diffStr  = diff >= 0 ? `+${pct(diff)}` : pct(diff);
+    const cls      = pctClass(a.current_pct, a.target_pct);
+    const usdBadge = a.currency === 'USD' ? `<span class="badge-usd">USD</span>` : '';
+    const priceStr = a.currency === 'USD'
+      ? `$${a.price_orig.toLocaleString('en-US',{maximumFractionDigits:2})} (≈${krwC(a.price)})`
+      : `${krw(a.price)}/주`;
+
+    html += `
+      <div class="asset-item">
+        <div class="asset-dot" style="background:${COLORS[i]}"></div>
+        <div class="asset-info">
+          <div class="asset-name">${a.name}${usdBadge}</div>
+          <div class="asset-meta">${a.ticker} · ${a.shares.toLocaleString()}주 · ${priceStr}</div>
+        </div>
+        <div class="asset-right">
+          <div class="asset-value">${krwC(a.value)}</div>
+          <div class="asset-pct ${cls}">${pct(a.current_pct)} / <span style="color:var(--muted)">${a.target_pct}%</span></div>
+        </div>
+      </div>`;
+  });
+  html += `</div>`;
+
+  // 비중 진행 바
+  const maxTgt = Math.max(...assets.map(a => a.target_pct)) * 1.5;
+  html += `<div class="card"><div class="card-label" style="margin-bottom:12px">목표 비중 대비 현황</div>`;
+  assets.forEach((a, i) => {
+    const fillW   = Math.min(a.current_pct / maxTgt * 100, 100);
+    const tickW   = a.target_pct / maxTgt * 100;
+    const barClr  = pctClass(a.current_pct, a.target_pct) === 'ok' ? COLORS[i]
+                  : pctClass(a.current_pct, a.target_pct) === 'over' ? '#f59e0b'
+                  : COLORS[i];
+    html += `
+      <div class="progress-row">
+        <div class="progress-label">${a.name.replace('TIGER ','').replace('배당 ','')}</div>
+        <div class="progress-wrap">
+          <div class="progress-fill" style="width:${fillW}%;background:${barClr}"></div>
+          <div class="progress-tick" style="left:${tickW}%"></div>
+        </div>
+        <div class="progress-pct">${pct(a.current_pct)}/${a.target_pct}%</div>
+      </div>`;
+  });
+  html += `</div>`;
+
+  el.innerHTML = html;
+
+  // Chart.js
+  const ctx = document.getElementById('pie-chart').getContext('2d');
+  if (pieChart) pieChart.destroy();
+  pieChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: assets.map(a => a.name),
+      datasets: [
+        { // 바깥 링 = 현재
+          data: assets.map(a => a.value > 0 ? a.value : 0.0001),
+          backgroundColor: COLORS,
+          borderWidth: 2, borderColor: '#fff',
+        },
+        { // 안쪽 링 = 목표
+          data: assets.map(a => a.target_pct),
+          backgroundColor: COLORS.map(c => c + '55'),
+          borderWidth: 0, weight: 0.45,
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '52%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ctx.datasetIndex === 0
+              ? ` 현재 ${pct(assets[ctx.dataIndex].current_pct)} (목표 ${assets[ctx.dataIndex].target_pct}%)`
+              : ` 목표 ${assets[ctx.dataIndex].target_pct}%`,
+          },
+        },
+      },
+    },
+  });
+
+  $('chart-legend').innerHTML = assets.map((a, i) => `
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${COLORS[i]}"></div>
+      <span>${a.name.replace('TIGER ','').replace('배당 ','')}</span>
+      <strong>${pct(a.current_pct)}</strong>
+    </div>`).join('');
+}
+
+// ════════════════════════════════════════════════════════════════
+// DIVIDEND
+// ════════════════════════════════════════════════════════════════
+function renderDividend() {
+  const el = $('page-dividend');
+  if (!S.portfolio) { el.innerHTML = noDataMsg(); return; }
+
+  const { assets } = S.portfolio;
+  const now       = new Date();
+  const thisMo    = now.getMonth() + 1;
+  const nextMo    = thisMo === 12 ? 1 : thisMo + 1;
+  const MONTHS    = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+  const monthDiv  = m => assets.reduce((s, a) => s + (a.div_months.includes(m) ? a.shares * a.div_per_share : 0), 0);
+  const annual    = assets.reduce((s, a) => s + a.shares * a.div_per_share * a.div_months.length, 0);
+  const monthlyAvg = annual / 12;
+
+  const noPayers = assets.every(a => a.div_per_share === 0);
+
+  let html = `
+    <div class="card total-card">
+      <div class="card-label">연간 예상 배당금 (원화)</div>
+      <div class="card-value">${krw(annual)}</div>
+      <div class="card-sub">월 평균 ${krwC(monthlyAvg)}</div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-label">이번 달 (${thisMo}월)</div>
+        <div style="font-size:18px;font-weight:800;color:var(--green)">${krwC(monthDiv(thisMo))}</div>
+        <div class="card-sub">${assets.filter(a=>a.div_months.includes(thisMo)&&a.div_per_share>0).map(a=>a.ticker).join(', ')||'해당없음'}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">다음 달 (${nextMo}월)</div>
+        <div style="font-size:18px;font-weight:800;color:var(--green)">${krwC(monthDiv(nextMo))}</div>
+        <div class="card-sub">${assets.filter(a=>a.div_months.includes(nextMo)&&a.div_per_share>0).map(a=>a.ticker).join(', ')||'해당없음'}</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">월별 배당 일정</div>`;
+
+  for (let m = 1; m <= 12; m++) {
+    const amt    = monthDiv(m);
+    const payers = assets.filter(a => a.div_months.includes(m) && a.div_per_share > 0);
+    const mark   = m === thisMo ? ' ← 이번달' : m === nextMo ? ' ← 다음달' : '';
+    html += `
+      <div class="div-row">
+        <div>
+          <div class="div-row-label" style="${m===thisMo?'color:var(--primary)':''}">${MONTHS[m-1]}${mark}</div>
+          <div class="div-row-sub">${payers.map(a=>`${a.name.split(' ').pop()}(${a.shares}주×${krw(a.div_per_share)})`).join(', ')||'배당 없음'}</div>
+        </div>
+        <div class="div-amount">${amt > 0 ? krw(amt) : '-'}</div>
+      </div>`;
+  }
+  html += `</div>`;
+
+  if (noPayers) html += `<div class="card" style="text-align:center;color:var(--muted);font-size:13px">
+    ⚙️ 설정 탭에서 주당 배당금을 입력하면 배당금이 계산됩니다.
+  </div>`;
+
+  el.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════════
+// REBALANCER
+// ════════════════════════════════════════════════════════════════
+function renderRebalanceForm() {
+  const el = $('page-rebalance');
+  if (!S.portfolio) { el.innerHTML = noDataMsg(); return; }
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="section-title">리밸런싱 계산기</div>
+      <div class="input-group">
+        <label class="input-label">이번 달 투자금액 (원)</label>
+        <input type="number" id="rb-amount" class="num-input" value="1000000" min="0" step="10000" placeholder="투자금액 입력">
+        <div class="presets" id="presets">
+          ${[300000,500000,1000000,2000000,3000000].map(v=>`
+            <button class="preset-btn" onclick="selectPreset(${v})">${krwC(v)}</button>`).join('')}
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="calcRebalance()">계산하기 →</button>
+    </div>
+    <div id="rb-result" class="hidden"></div>`;
+}
+
+function selectPreset(v) {
+  $('rb-amount').value = v;
+  document.querySelectorAll('.preset-btn').forEach(b => {
+    const bv = parseInt(b.textContent.replace(/[^0-9]/g,''));
+    b.classList.toggle('sel', bv === v / 10000 || b.textContent === krwC(v));
+  });
+  calcRebalance();
+}
+
+function calcRebalance() {
+  const amount = parseFloat($('rb-amount').value);
+  if (!amount || amount <= 0) { showToast('투자금액을 입력해주세요.'); return; }
+
+  const { assets, total_value } = S.portfolio;
+  rebalancePlan = computePlan(assets, total_value, amount);
+  renderRebalanceResult(rebalancePlan, amount);
+}
+
+function computePlan(assets, totalValue, budget) {
+  const newTotal = totalValue + budget;
+
+  // 각 자산의 목표값과 갭 계산
+  const items = assets.map(a => ({
+    ...a,
+    targetValue: a.target_pct / 100 * newTotal,
+    gap: Math.max(0, a.target_pct / 100 * newTotal - a.value),
+    sharesToBuy: 0,
+    buyAmountKRW: 0,
+  }));
+
+  const totalGap = items.reduce((s, i) => s + i.gap, 0);
+  const scale    = totalGap > budget ? budget / totalGap : 1;
+
+  // 1차: 스케일 적용 후 floor로 주수 결정
+  let remaining = budget;
+  items.forEach(item => {
+    if (item.price <= 0) return;
+    const alloc  = item.gap * scale;
+    const shares = Math.floor(alloc / item.price);
+    item.sharesToBuy   = shares;
+    item.buyAmountKRW  = shares * item.price;
+    remaining -= item.buyAmountKRW;
+  });
+
+  // 2차: greedy — 잔여 현금으로 가장 비중이 부족한 종목 1주씩 추가
+  let changed = true;
+  while (changed && remaining > 0) {
+    changed = false;
+    let bestItem = null, bestGap = -Infinity;
+
+    for (const item of items) {
+      if (item.price <= 0 || item.price > remaining) continue;
+      const newVal = item.value + item.buyAmountKRW + item.price;
+      const newPct = newVal / newTotal * 100;
+      const distToTgt = item.target_pct - newPct; // 클수록 더 필요
+      if (distToTgt > bestGap) { bestGap = distToTgt; bestItem = item; }
+    }
+
+    if (bestItem && bestGap > -0.5) {
+      bestItem.sharesToBuy++;
+      bestItem.buyAmountKRW += bestItem.price;
+      remaining -= bestItem.price;
+      changed = true;
+    }
+  }
+
+  const actualSpent    = budget - remaining;
+  const actualNewTotal = totalValue + actualSpent;
+  items.forEach(item => {
+    item.newValue = item.value + item.buyAmountKRW;
+    item.newPct   = actualNewTotal > 0 ? item.newValue / actualNewTotal * 100 : 0;
+  });
+
+  return { items, remaining, actualSpent, newTotal: actualNewTotal };
+}
+
+function renderRebalanceResult(plan, budget) {
+  const usdkrw = S.portfolio?.usdkrw;
+
+  let html = `<div class="card">
+    <div class="section-title">매수 계획</div>
+    <table class="rb-table">
+      <thead><tr>
+        <th>종목</th>
+        <th style="text-align:right">현재가</th>
+        <th style="text-align:center">매수 수량</th>
+        <th style="text-align:right">매수 후 비중</th>
+      </tr></thead><tbody>`;
+
+  plan.items.forEach((item, i) => {
+    const priceDisp = item.currency === 'USD'
+      ? `$${item.price_orig.toLocaleString('en-US',{maximumFractionDigits:2})}`
+      : krwC(item.price);
+    const usdBadge = item.currency === 'USD' ? `<span class="badge-usd">USD</span>` : '';
+    const buyKRW   = item.sharesToBuy > 0
+      ? `<div style="font-size:11px;color:var(--muted)">${krw(item.buyAmountKRW)}</div>` : '';
+    const cls = pctClass(item.newPct, item.target_pct);
+
+    html += `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="width:8px;height:8px;border-radius:50%;background:${COLORS[i]};flex-shrink:0"></div>
+          <div>
+            <div style="font-weight:700;font-size:12px">${item.name}${usdBadge}</div>
+            ${buyKRW}
+          </div>
+        </div>
+      </td>
+      <td style="text-align:right;font-size:12px;color:var(--muted)">${priceDisp}</td>
+      <td style="text-align:center">
+        ${item.sharesToBuy > 0
+          ? `<span class="shares-buy">${item.sharesToBuy}주</span>`
+          : `<span class="shares-zero">-</span>`}
+      </td>
+      <td style="text-align:right">
+        <div style="font-weight:700;font-size:13px;color:var(--${cls==='ok'?'green':cls==='over'?'yellow':'text})">${pct(item.newPct)}</div>
+        <div style="font-size:10px;color:var(--muted)">목표 ${item.target_pct}%</div>
+      </td>
+    </tr>`;
+  });
+
+  html += `</tbody></table></div>`;
+
+  // 요약
+  html += `<div class="card">
+    <div class="summary-row"><div class="summary-label">투자 예산</div><div class="summary-value">${krw(budget)}</div></div>
+    <div class="divider"></div>
+    <div class="summary-row"><div class="summary-label">실제 매수 금액</div><div class="summary-value">${krw(plan.actualSpent)}</div></div>
+    <div class="summary-row"><div class="summary-label" style="color:var(--yellow)">잔여 현금</div><div class="summary-value" style="color:var(--yellow)">${krw(plan.remaining)}</div></div>
+    <div class="divider"></div>
+    <div class="summary-row"><div class="summary-label">매수 후 총 자산</div><div class="summary-value" style="color:var(--primary)">${krwC(plan.newTotal)}</div></div>
+  </div>`;
+
+  const hasBuys = plan.items.some(i => i.sharesToBuy > 0);
+  if (hasBuys) {
+    html += `<button class="btn btn-success" id="apply-btn" onclick="applyPurchase()">
+      ✅ 이대로 매수 완료 — 포트폴리오에 반영
+    </button>`;
+  }
+
+  const el = $('rb-result');
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+}
+
+async function applyPurchase() {
+  if (!rebalancePlan) return;
+  const updates = rebalancePlan.items
+    .filter(i => i.sharesToBuy > 0)
+    .map(i => ({ ticker: i.ticker, addShares: i.sharesToBuy }));
+  if (!updates.length) return;
+
+  const btn = $('apply-btn');
+  btn.disabled = true;
+  btn.textContent = '저장 중...';
+
+  try {
+    await gasGet('updateHoldings', updates);
+    showToast('✅ 매수 완료! 포트폴리오가 업데이트됐습니다.');
+    rebalancePlan = null;
+    await fetchPortfolio();
+    document.querySelector('[data-page="home"]').click();
+  } catch (e) {
+    showToast('❌ 저장 실패: ' + e.message, 4000);
+    btn.disabled = false;
+    btn.textContent = '✅ 이대로 매수 완료 — 포트폴리오에 반영';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// GOAL
+// ════════════════════════════════════════════════════════════════
+function renderGoalForm() {
+  const el = $('page-goal');
+  if (!S.portfolio) { el.innerHTML = noDataMsg(); return; }
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="section-title">배당 목표 계산기</div>
+      <div class="input-group">
+        <label class="input-label">목표 월 배당금 (원)</label>
+        <input type="number" id="goal-amount" class="num-input" value="500000" min="0" step="10000" placeholder="목표 월 배당금">
+        <div class="presets">
+          ${[300000,500000,1000000,2000000,5000000].map(v=>`
+            <button class="preset-btn" onclick="selectGoalPreset(${v})">${krwC(v)}</button>`).join('')}
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="calcGoal()">계산하기 →</button>
+    </div>
+    <div id="goal-result" class="hidden"></div>`;
+}
+
+function selectGoalPreset(v) {
+  $('goal-amount').value = v;
+  calcGoal();
+}
+
+function calcGoal() {
+  const targetMonthly = parseFloat($('goal-amount').value);
+  if (!targetMonthly || targetMonthly <= 0) return;
+
+  const { assets, total_value } = S.portfolio;
+  const targetAnnual = targetMonthly * 12;
+
+  // 포트폴리오 목표 비중 기준 가중 배당수익률
+  let weightedYield = 0;
+  assets.forEach(a => {
+    if (a.price > 0 && a.div_per_share > 0 && a.div_months.length > 0) {
+      const annualDivPerShare = a.div_per_share * a.div_months.length; // KRW 기준
+      const assetYield        = annualDivPerShare / a.price;
+      weightedYield += (a.target_pct / 100) * assetYield;
+    }
+  });
+
+  const currentAnnual  = assets.reduce((s,a) => s + a.shares * a.div_per_share * a.div_months.length, 0);
+  const currentMonthly = currentAnnual / 12;
+  const el = $('goal-result');
+
+  if (weightedYield <= 0) {
+    el.innerHTML = `<div class="card" style="text-align:center;color:var(--muted);font-size:13px;padding:24px">
+      ⚙️ 설정 탭에서 주당 배당금을 입력해주세요.</div>`;
+    el.classList.remove('hidden');
+    return;
+  }
+
+  const requiredTotal     = targetAnnual / weightedYield;
+  const additionalNeeded  = Math.max(0, requiredTotal - total_value);
+  const progressPct       = Math.min(total_value / requiredTotal * 100, 100);
+
+  el.innerHTML = `
+    <div class="card total-card">
+      <div class="card-label">목표 월 배당금</div>
+      <div class="card-value">${krw(targetMonthly)}</div>
+      <div class="card-sub">연 ${krwC(targetAnnual)}</div>
+    </div>
+    <div class="card">
+      <div class="card-label" style="margin-bottom:10px">달성률 ${progressPct.toFixed(1)}%</div>
+      <div style="background:var(--border);border-radius:8px;height:14px;overflow:hidden;margin-bottom:16px">
+        <div style="height:100%;width:${progressPct}%;background:linear-gradient(90deg,var(--green),var(--primary));border-radius:8px;transition:width 0.6s"></div>
+      </div>
+      <div class="goal-row"><div class="goal-label">현재 총 자산</div><div class="goal-value">${krwC(total_value)}</div></div>
+      <div class="goal-row"><div class="goal-label">현재 월 배당금 (평균)</div><div class="goal-value" style="color:var(--green)">${krw(currentMonthly)}</div></div>
+      <div class="divider"></div>
+      <div class="goal-row"><div class="goal-label">목표 달성 필요 총 자산</div><div class="goal-value" style="color:var(--primary)">${krwC(requiredTotal)}</div></div>
+      <div class="goal-row"><div class="goal-label">추가 필요 자산</div>
+        <div class="goal-value" style="color:${additionalNeeded>0?'var(--red)':'var(--green)'}">
+          ${additionalNeeded > 0 ? krwC(additionalNeeded) : '목표 달성! 🎉'}
+        </div>
+      </div>
+      <div class="goal-row"><div class="goal-label">포트폴리오 가중 배당수익률</div><div class="goal-value">${(weightedYield*100).toFixed(2)}%</div></div>
+    </div>`;
+  el.classList.remove('hidden');
+}
+
+// ════════════════════════════════════════════════════════════════
+// SETTINGS
+// ════════════════════════════════════════════════════════════════
+function renderSettings() {
+  const el     = $('page-settings');
+  const assets = S.portfolio?.assets || [];
+
+  // 포트폴리오 없으면 기본 종목 리스트로
+  const displayAssets = assets.length > 0 ? assets : [
+    {ticker:'0072R0',name:'TIGER KRX금현물',    div_per_share_orig:0,div_months:[],currency:'KRW'},
+    {ticker:'379810',name:'TIGER 나스닥100',     div_per_share_orig:0,div_months:[],currency:'KRW'},
+    {ticker:'379800',name:'TIGER S&P500',        div_per_share_orig:0,div_months:[],currency:'KRW'},
+    {ticker:'441640',name:'배당 액티브커버드콜', div_per_share_orig:0,div_months:[1,2,3,4,5,6,7,8,9,10,11,12],currency:'KRW'},
+    {ticker:'458730',name:'배당 성장주',         div_per_share_orig:0,div_months:[1,2,3,4,5,6,7,8,9,10,11,12],currency:'KRW'},
+  ];
+
+  let html = `
+    <div class="card">
+      <div class="settings-section">GAS 연결</div>
+      <div class="input-group">
+        <label class="input-label">Google Apps Script 웹앱 URL</label>
+        <input type="text" id="gas-url-input" class="text-input" value="${S.gasUrl}"
+          placeholder="https://script.google.com/macros/s/.../exec">
+      </div>
+      <button class="btn btn-primary" onclick="saveGasUrl()">저장 및 연결</button>
+    </div>
+
+    <div class="card">
+      <div class="settings-section">종목별 배당금 설정</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px">
+        USD 자산의 배당금은 달러($) 기준으로 입력하세요. 환율은 자동 적용됩니다.
+      </p>`;
+
+  displayAssets.forEach(a => {
+    const divVal   = a.div_per_share_orig !== undefined ? a.div_per_share_orig : a.div_per_share;
+    const currency = a.currency || 'KRW';
+    const unit     = currency === 'USD' ? '$' : '원';
+
+    html += `
+      <div class="div-setting-row">
+        <div class="div-setting-name">${a.name}</div>
+        <div class="div-setting-sub">${a.ticker} · ${currency}</div>
+        <div class="div-setting-fields">
+          <div>
+            <label class="input-label" style="font-size:11px">주당 배당금 (${unit})</label>
+            <input type="number" class="small-input" id="div-${a.ticker}"
+              value="${divVal}" min="0" step="${currency==='USD'?'0.01':'1'}" placeholder="0">
+          </div>
+          <div>
+            <label class="input-label" style="font-size:11px">통화</label>
+            <select class="small-input" id="cur-${a.ticker}">
+              <option value="KRW" ${currency==='KRW'?'selected':''}>원화 (KRW)</option>
+              <option value="USD" ${currency==='USD'?'selected':''}>달러 (USD)</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="input-label" style="font-size:11px">배당 지급월</label>
+          <div class="month-checks">
+            ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`
+              <label>
+                <input type="checkbox" id="dm-${a.ticker}-${m}" value="${m}"
+                  ${a.div_months.includes(m)?'checked':''}>
+                ${m}월
+              </label>`).join('')}
+          </div>
+        </div>
+      </div>`;
+  });
+
+  html += `
+      <button class="btn btn-primary" onclick="saveDivSettings()" style="margin-top:16px">배당 설정 저장</button>
+    </div>
+
+    <div class="card" style="text-align:center;color:var(--muted);font-size:12px;line-height:1.8">
+      <div style="margin-bottom:8px;font-weight:700;font-size:13px">포트폴리오 목표 비중</div>
+      금현물 10% · 나스닥100 10% · S&amp;P500 20% · 커버드콜 30% · 배당성장주 30%<br>
+      데이터는 Google Sheets에 저장됩니다.
+    </div>`;
+
+  el.innerHTML = html;
+}
+
+async function saveGasUrl() {
+  const url = $('gas-url-input').value.trim();
+  if (!url) { showToast('URL을 입력해주세요.'); return; }
+  S.gasUrl = url;
+  localStorage.setItem('gasUrl', url);
+  showToast('✅ URL 저장됨. 데이터를 불러옵니다...');
+  await fetchPortfolio();
+}
+
+async function saveDivSettings() {
+  if (!S.gasUrl) { showToast('먼저 GAS URL을 저장해주세요.'); return; }
+  const assets = S.portfolio?.assets || [];
+
+  const tickers = assets.length ? assets.map(a=>a.ticker)
+    : ['0072R0','379810','379800','441640','458730'];
+
+  const updates = tickers.map(ticker => {
+    const divInput  = $(`div-${ticker}`);
+    const curSel    = $(`cur-${ticker}`);
+    const divVal    = divInput ? parseFloat(divInput.value)||0 : 0;
+    const currency  = curSel  ? curSel.value : 'KRW';
+    const divMonths = [1,2,3,4,5,6,7,8,9,10,11,12].filter(m => {
+      const cb = $(`dm-${ticker}-${m}`);
+      return cb && cb.checked;
+    });
+    return { ticker, div_per_share: divVal, div_months: divMonths, currency };
+  });
+
+  try {
+    await gasGet('updateConfig', updates);
+    showToast('✅ 배당 설정이 저장됐습니다.');
+    await fetchPortfolio();
+  } catch(e) {
+    showToast('❌ 저장 실패: ' + e.message, 4000);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// Helpers
+// ════════════════════════════════════════════════════════════════
+function noDataMsg() {
+  return `<div class="center-state">
+    <div class="error-icon">📊</div>
+    <p>홈 탭에서 데이터를 먼저 로드해주세요.</p>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════════════
+// Init
+// ════════════════════════════════════════════════════════════════
+if (S.gasUrl) {
+  fetchPortfolio();
+} else {
+  $('page-home').innerHTML = `<div class="center-state">
+    <div class="error-icon">⚙️</div>
+    <p>시작하려면 GAS URL을 설정해주세요.</p>
+    <button class="btn btn-primary" style="width:auto;padding:10px 24px;margin-top:8px"
+      onclick="document.querySelector('[data-page=settings]').click()">설정으로 이동 →</button>
+  </div>`;
+  renderSettings();
+}
+</script>
+</body>
+</html>
