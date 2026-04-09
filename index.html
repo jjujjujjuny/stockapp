@@ -374,6 +374,13 @@ function syncChart(assets) {
   const canvas = $id('pie-chart');
   if (!canvas) return;
 
+  // renderHome()이 DOM을 재생성하면 캔버스가 교체됨.
+  // 이전 차트가 다른 캔버스를 가리키고 있으면 destroy 후 새로 만들어야 함.
+  if (_chart && _chart.canvas !== canvas) {
+    _chart.destroy();
+    _chart = null;
+  }
+
   const data = {
     labels: assets.map(a => a.name),
     datasets: [
