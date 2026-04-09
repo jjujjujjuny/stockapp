@@ -251,11 +251,11 @@ body {
 const COLORS = ['#FFB800', '#3B82F6', '#10B981', '#F97316', '#8B5CF6'];
 
 const DEFAULT_ASSETS = [
-  { ticker: '0072R0', name: 'TIGER KRX금현물',       div_per_share_orig: 0, div_months: [],                              currency: 'KRW' },
-  { ticker: '379810', name: 'TIGER 나스닥100',        div_per_share_orig: 0, div_months: [],                              currency: 'KRW' },
-  { ticker: '379800', name: 'TIGER S&P500',           div_per_share_orig: 0, div_months: [],                              currency: 'KRW' },
-  { ticker: '441640', name: '배당 액티브커버드콜',   div_per_share_orig: 0, div_months: [1,2,3,4,5,6,7,8,9,10,11,12],   currency: 'KRW' },
-  { ticker: '458730', name: '배당 성장주',            div_per_share_orig: 0, div_months: [1,2,3,4,5,6,7,8,9,10,11,12],  currency: 'KRW' },
+  { ticker: '0072R0', name: 'TIGER KRX금현물',       shares: 0, div_per_share_orig: 0, div_months: [],                             currency: 'KRW' },
+  { ticker: '379810', name: 'TIGER 나스닥100',        shares: 0, div_per_share_orig: 0, div_months: [],                             currency: 'KRW' },
+  { ticker: '379800', name: 'TIGER S&P500',           shares: 0, div_per_share_orig: 0, div_months: [],                             currency: 'KRW' },
+  { ticker: '441640', name: '배당 액티브커버드콜',   shares: 0, div_per_share_orig: 0, div_months: [1,2,3,4,5,6,7,8,9,10,11,12],  currency: 'KRW' },
+  { ticker: '458730', name: '배당 성장주',            shares: 0, div_per_share_orig: 0, div_months: [1,2,3,4,5,6,7,8,9,10,11,12], currency: 'KRW' },
 ];
 
 // ════════════════════════════════════════════════════════════════
@@ -339,6 +339,7 @@ const api = {
   },
 
   updateHoldings: data => api._get('updateHoldings', data),
+  setHoldings:    data => api._get('setHoldings',    data),
   updateConfig:   data => api._get('updateConfig',   data),
 };
 
@@ -906,7 +907,36 @@ function renderSettings() {
     );
   });
 
+  // 보유 수량 편집 행
+  const holdingRows = assets.map(a =>
+    h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 0', borderBottom: '1px solid var(--border)' } },
+      h('div', { style: { flex: '1', minWidth: '0' } },
+        h('div', { style: { fontSize: '13px', fontWeight: '700' } }, a.name),
+        h('div', { style: { fontSize: '11px', color: 'var(--muted)', marginTop: '2px' } }, a.ticker),
+      ),
+      h('input', {
+        type:  'number',
+        id:    `shares-${a.ticker}`,
+        class: 'small-input',
+        value: String(a.shares ?? 0),
+        min:   '0',
+        step:  '1',
+        style: { width: '100px', textAlign: 'right' },
+      }),
+      h('span', { style: { fontSize: '12px', color: 'var(--muted)', flexShrink: '0' } }, '주'),
+    ),
+  );
+
   setChildren(el,
+    // 보유 수량 편집
+    h('div', { class: 'card' },
+      h('div', { class: 'settings-section' }, '보유 수량 편집'),
+      ...holdingRows,
+      h('button', { class: 'btn btn-primary', 'data-action': 'save-holdings', style: { marginTop: '16px' } },
+        '수량 저장',
+      ),
+    ),
+
     h('div', { class: 'card' },
       h('div', { class: 'settings-section' }, 'GAS 연결'),
       h('div', { class: 'input-group' },
@@ -933,7 +963,7 @@ function renderSettings() {
       h('br', {}),
       '데이터는 Google Sheets에 저장됩니다.',
     ),
-  );
+  );  // setChildren
 }
 
 // ── HELPER ───────────────────────────────────────────────────────
@@ -962,6 +992,24 @@ async function fetchPortfolio() {
     setState({ portfolio, loading: false });
   } catch (e) {
     setState({ loading: false, error: e.message });
+  }
+}
+
+async function saveHoldings() {
+  if (!state.gasUrl) { showToast('먼저 GAS URL을 저장해주세요.'); return; }
+  const assets = state.portfolio?.assets?.length ? state.portfolio.assets : DEFAULT_ASSETS;
+
+  const updates = assets.map(a => ({
+    ticker: a.ticker,
+    shares: parseFloat($id(`shares-${a.ticker}`)?.value) || 0,
+  }));
+
+  try {
+    await api.setHoldings(updates);
+    showToast('✅ 수량이 저장됐습니다.');
+    await fetchPortfolio();
+  } catch (e) {
+    showToast('❌ 저장 실패: ' + e.message, 4000);
   }
 }
 
@@ -1120,6 +1168,10 @@ $id('app').addEventListener('click', e => {
 
     case 'apply-purchase':
       applyPurchase();
+      break;
+
+    case 'save-holdings':
+      saveHoldings();
       break;
 
     case 'save-gas-url':

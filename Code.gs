@@ -57,6 +57,7 @@ function doGet(e) {
 
     if      (action === 'getPortfolio')    data = getPortfolio();
     else if (action === 'updateHoldings')  data = updateHoldings(parseParam(e.parameter.data));
+    else if (action === 'setHoldings')     data = setHoldings(parseParam(e.parameter.data));
     else if (action === 'updateConfig')    data = updateConfig(parseParam(e.parameter.data));
     else throw new Error('Unknown action: ' + action);
 
@@ -212,6 +213,24 @@ function updateHoldings(updates) {
     if (map[ticker] !== undefined) {
       const current = Number(rows[i][1]) || 0;
       sheet.getRange(i + 1, 2).setValue(current + map[ticker]);
+    }
+  }
+  return { updated: updates.length };
+}
+
+// ── 보유수량 절대값 설정: [{ticker, shares}] ────────────────────────
+function setHoldings(updates) {
+  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(HOLDINGS_SHEET);
+  const rows  = sheet.getDataRange().getValues();
+
+  const map = {};
+  updates.forEach(u => { map[u.ticker] = Number(u.shares) || 0; });
+
+  for (let i = 1; i < rows.length; i++) {
+    const ticker = String(rows[i][0]);
+    if (map[ticker] !== undefined) {
+      sheet.getRange(i + 1, 2).setValue(map[ticker]);
     }
   }
   return { updated: updates.length };
