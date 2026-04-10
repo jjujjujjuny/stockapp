@@ -1563,7 +1563,7 @@ function mergeHistory(existing = [], fetched = []) {
   return Object.values(map).sort((a, b) => a.ym.localeCompare(b.ym));
 }
 
-// 전체 종목 배당 기록 동기화
+// 전체 종목 배당 기록 동기화 (GAS 프록시를 통해 Yahoo Finance 호출 — 브라우저 CORS 우회)
 async function syncDividends(silent = false) {
   const assets = state.portfolio?.assets;
   if (!assets || state.divSyncing) return;
@@ -1573,12 +1573,19 @@ async function syncDividends(silent = false) {
   const history = { ...state.divHistory };
   let updated = 0;
 
-  await Promise.all(assets.map(async a => {
-    const fetched = await fetchDividendHistory(a.ticker);
-    if (!fetched || fetched.length === 0) return;
-    history[a.ticker] = mergeHistory(history[a.ticker] || [], fetched);
-    updated++;
-  }));
+  try {
+    const tickers = assets.map(a => a.ticker);
+    const result  = await api._get('getDividends', tickers);
+    if (result?.data) {
+      for (const [ticker, fetched] of Object.entries(result.data)) {
+        if (!fetched || fetched.length === 0) continue;
+        history[ticker] = mergeHistory(history[ticker] || [], fetched);
+        updated++;
+      }
+    }
+  } catch(e) {
+    console.error('[syncDividends]', e);
+  }
 
   const now = new Date().toISOString();
   localStorage.setItem('divHistory', JSON.stringify(history));
