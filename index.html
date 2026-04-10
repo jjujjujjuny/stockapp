@@ -1286,15 +1286,30 @@ async function fetchPortfolio() {
     setState({ portfolio, loading: false });
 
     // 백그라운드: 캐시 없는 종목 이름 조회 후 갱신
-    const toLookup = portfolio.assets.filter(a => !nameCache[a.ticker]);
+    // customPortfolio 티커도 포함 (GAS에 없는 종목 대비)
+    const allTickers = [
+      ...portfolio.assets.map(a => a.ticker),
+      ...(state.customPortfolio || []).map(r => r.ticker),
+    ];
+    const toLookup = [...new Set(allTickers)].filter(t => !nameCache[t]);
     if (toLookup.length > 0) {
-      Promise.all(toLookup.map(a => lookupStockName(a.ticker))).then(() => {
+      Promise.all(toLookup.map(t => lookupStockName(t))).then(() => {
         if (!state.portfolio) return;
+        // portfolio 이름 갱신
         const enriched = state.portfolio.assets.map(a => ({
           ...a,
           name: nameCache[a.ticker] || a.name,
         }));
-        setState({ portfolio: { ...state.portfolio, assets: enriched } });
+        // customPortfolio 이름도 갱신해 저장 (틀린 이름 자동 수정)
+        const updatedCp = state.customPortfolio?.map(r => ({
+          ...r,
+          name: nameCache[r.ticker] || r.name,
+        }));
+        if (updatedCp) localStorage.setItem('customPortfolio', JSON.stringify(updatedCp));
+        setState({
+          portfolio: { ...state.portfolio, assets: enriched },
+          ...(updatedCp ? { customPortfolio: updatedCp } : {}),
+        });
       });
     }
   } catch (e) {
@@ -1357,6 +1372,7 @@ function getPortfolioRowsFromDOM() {
     }));
   return cp.map(r => ({
     ...r,
+    name: nameCache[r.ticker] || r.name || r.ticker,  // 캐시된 정확한 이름 우선
     target_pct: parseFloat($id(`tgt-${r.ticker}`)?.value ?? r.target_pct) || 0,
   }));
 }
