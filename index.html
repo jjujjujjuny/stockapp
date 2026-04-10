@@ -506,7 +506,7 @@ let state = {
   divSyncTime:    localStorage.getItem('divSyncTime') || null,
   divSyncing:        false,
   totalCashInvested: parseFloat(localStorage.getItem('totalCashInvested')) || 0,
-  lastDivReinvestYM: localStorage.getItem('lastDivReinvestYM') || null,
+  divReinvestLog:    JSON.parse(localStorage.getItem('divReinvestLog') || '{}'),
   loading:    false,
   error:      null,
   activeTab:  'home',
@@ -1584,27 +1584,29 @@ async function fetchDividendHistory(ticker) {
     if (!divs) return null;
     return Object.values(divs)
       .map(d => {
-        const dt = new Date(d.date * 1000);
-        return {
-          ym:     `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`,
-          amount: d.amount,
-          source: 'auto',
-        };
+        const dt   = new Date(d.date * 1000);
+        const ym   = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+        const date = `${ym}-${String(dt.getDate()).padStart(2, '0')}`;
+        return { ym, date, amount: d.amount, source: 'auto' };
       })
-      .sort((a, b) => a.ym.localeCompare(b.ym));
+      .sort((a, b) => a.date.localeCompare(b.date));
   } catch {
     return null;
   }
 }
 
-// 기존 기록과 새로 가져온 기록을 병합 (수동 입력은 유지)
+// 기존 기록과 새로 가져온 기록을 병합 (수동 입력은 유지, date 필드 보존)
 function mergeHistory(existing = [], fetched = []) {
   const map = {};
   existing.forEach(e => { map[e.ym] = e; });
   fetched.forEach(f => {
-    if (!map[f.ym] || map[f.ym].source !== 'manual') map[f.ym] = f;
+    if (!map[f.ym] || map[f.ym].source !== 'manual') {
+      map[f.ym] = { ...map[f.ym], ...f };  // date 포함 모든 필드 갱신
+    } else if (!map[f.ym].date && f.date) {
+      map[f.ym] = { ...map[f.ym], date: f.date };  // 수동 기록에도 date 보완
+    }
   });
-  return Object.values(map).sort((a, b) => a.ym.localeCompare(b.ym));
+  return Object.values(map).sort((a, b) => (a.date || a.ym).localeCompare(b.date || b.ym));
 }
 
 // 전체 종목 배당 기록 동기화 (GAS 프록시를 통해 Yahoo Finance 호출 — 브라우저 CORS 우회)
@@ -1664,56 +1666,53 @@ function toKrw(amount, asset) {
 // ════════════════════════════════════════════════════════════════
 // BUSINESS LOGIC
 // ════════════════════════════════════════════════════════════════
-// ── 자동 배당 재투자 (월 1회) ─────────────────────────────────────
+// ── 자동 배당 재투자 (지급일 기준, 종목별) ───────────────────────
 async function applyDivReinvestment() {
-  const now   = new Date();
-  const thisYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  if (state.lastDivReinvestYM === thisYM) return;  // 이번 달 이미 처리됨
-
   const assets = state.portfolio?.assets;
   if (!assets?.length) return;
 
-  const thisM = now.getMonth() + 1;
+  const today = new Date().toISOString().slice(0, 10);  // "YYYY-MM-DD"
+  const log   = { ...state.divReinvestLog };            // 종목별 마지막 처리 날짜
   const reinvestUpdates = [];
   const toastLines = [];
 
   for (const a of assets) {
-    const months = getEffDivMonths(a);
-    if (!months.includes(thisM)) continue;
-
-    // 이번 달 주당 배당금 (KRW 환산)
     const hist = state.divHistory[a.ticker];
-    let divPerShareKrw = 0;
-    if (hist?.length > 0) {
-      const sameMonth = hist.filter(h => parseInt(h.ym.split('-')[1]) === thisM);
-      const raw = sameMonth.length > 0
-        ? sameMonth[sameMonth.length - 1].amount
-        : hist[hist.length - 1].amount;
-      divPerShareKrw = toKrw(raw, a);
-    } else {
-      divPerShareKrw = toKrw(a.div_per_share || 0, a);
+    if (!hist?.length) continue;
+
+    // date 필드가 있는 기록 중, 오늘 이전이고 아직 미처리인 것들
+    const lastDone = log[a.ticker] || '0000-00-00';
+    const pending = hist.filter(h => h.date && h.date <= today && h.date > lastDone);
+    if (pending.length === 0) continue;
+
+    // 각 미처리 배당을 순서대로 합산 (대부분 1개)
+    let totalDivKrw = 0;
+    for (const rec of pending) {
+      totalDivKrw += a.shares * toKrw(rec.amount, a);
     }
 
-    if (divPerShareKrw <= 0 || !a.price) continue;
+    if (totalDivKrw <= 0 || !a.price) continue;
 
-    const totalDiv = a.shares * divPerShareKrw;
-    const newShares = Math.floor(totalDiv / a.price);
+    const newShares = Math.floor(totalDivKrw / a.price);
+    const latestDate = pending[pending.length - 1].date;
+    log[a.ticker] = latestDate;  // 처리 완료 날짜 갱신
+
     if (newShares <= 0) continue;
 
     reinvestUpdates.push({ ticker: a.ticker, addShares: newShares });
-    toastLines.push(`${a.name}: +${newShares}주`);
+    toastLines.push(`${a.name}: +${newShares}주 (${latestDate})`);
   }
 
-  // 이번 달 처리 완료 마킹 (재투자 종목 유무와 무관하게)
-  localStorage.setItem('lastDivReinvestYM', thisYM);
-  setState({ lastDivReinvestYM: thisYM });
+  // 처리 날짜 로그 저장
+  localStorage.setItem('divReinvestLog', JSON.stringify(log));
+  setState({ divReinvestLog: log });
 
   if (reinvestUpdates.length === 0) return;
 
   try {
     await api.updateHoldings(reinvestUpdates);
-    showToast(`💰 배당 재투자 완료 (${thisYM})\n` + toastLines.join('\n'), 5000);
-    await fetchPortfolio();  // 수량 반영 후 화면 갱신
+    showToast('💰 배당 재투자 완료\n' + toastLines.join('\n'), 5000);
+    await fetchPortfolio();
   } catch (e) {
     showToast('❌ 배당 재투자 업데이트 실패: ' + e.message, 4000);
   }

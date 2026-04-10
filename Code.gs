@@ -254,12 +254,10 @@ function getDividends(tickers) {
       if (!divs) return;
       results[ticker] = Object.values(divs).map(function(d) {
         const dt = new Date(d.date * 1000);
-        return {
-          ym:     dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0'),
-          amount: d.amount,
-          source: 'auto',
-        };
-      }).sort(function(a, b) { return a.ym.localeCompare(b.ym); });
+        const ym   = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+        const date = ym + '-' + String(dt.getDate()).padStart(2, '0');
+        return { ym: ym, date: date, amount: d.amount, source: 'auto' };
+      }).sort(function(a, b) { return a.date.localeCompare(b.date); });
     } catch(e) {
       Logger.log('[getDividends] ' + ticker + ': ' + e);
     }
