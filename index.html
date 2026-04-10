@@ -1460,14 +1460,6 @@ function renderPortfolioEditor() {
           value: String(row.target_pct),
         }),
         h('span', { class: 'pct-label' }, '%'),
-        h('span', { class: 'field-label', style: { marginLeft: '10px' } }, '평균단가'),
-        h('input', {
-          type: 'number', class: 'avg-input',
-          id: `avg-${row.ticker}`, min: '0', step: '1',
-          value: String(row.avg_price || 0),
-          placeholder: '0',
-        }),
-        h('span', { class: 'pct-label' }, '원/주'),
       ),
     )
   );
@@ -1750,7 +1742,7 @@ function getPortfolioRowsFromDOM() {
     ...r,
     name:       nameCache[r.ticker] || r.name || r.ticker,
     target_pct: parseFloat($id(`tgt-${r.ticker}`)?.value ?? r.target_pct) || 0,
-    avg_price:  parseFloat($id(`avg-${r.ticker}`)?.value ?? r.avg_price)  || 0,
+    avg_price:  r.avg_price || 0,
   }));
 }
 
