@@ -1576,8 +1576,8 @@ async function syncDividends(silent = false) {
   try {
     const tickers = assets.map(a => a.ticker);
     const result  = await api._get('getDividends', tickers);
-    if (result?.data) {
-      for (const [ticker, fetched] of Object.entries(result.data)) {
+    if (result) {
+      for (const [ticker, fetched] of Object.entries(result)) {
         if (!fetched || fetched.length === 0) continue;
         history[ticker] = mergeHistory(history[ticker] || [], fetched);
         updated++;
