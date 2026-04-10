@@ -461,26 +461,102 @@ function setState(patch) {
 // ════════════════════════════════════════════════════════════════
 let nameCache = JSON.parse(localStorage.getItem('tickerNames') || '{}');
 
+// 한국 ETF/주식 내장 이름 맵 (API 실패 시 즉시 반환)
+const KR_NAMES = {
+  // TIGER (Mirae Asset)
+  '0072R0': 'TIGER KRX금현물',
+  '102110': 'TIGER 200',
+  '329200': 'TIGER KOSDAQ150',
+  '360200': 'TIGER 코스닥150',
+  '379800': 'TIGER S&P500',
+  '379810': 'TIGER 나스닥100',
+  '411060': 'TIGER 미국나스닥100타겟데일리커버드콜',
+  '441640': 'TIGER 미국배당다우존스타겟데일리커버드콜',
+  '449170': 'TIGER 미국S&P500타겟데일리커버드콜',
+  '458730': 'TIGER 미국배당다우존스',
+  '364980': 'TIGER 미국테크TOP10타겟데일리커버드콜',
+  '476490': 'TIGER 미국배당+7%프리미엄다우존스',
+  // KODEX (Samsung)
+  '069500': 'KODEX 200',
+  '229200': 'KODEX 코스닥150',
+  '133690': 'KODEX 나스닥100',
+  '360750': 'KODEX 미국S&P500TR',
+  '379780': 'KODEX 미국나스닥100TR',
+  '466920': 'KODEX 미국배당프리미엄액티브',
+  // ACE (한국투자신탁)
+  '483750': 'ACE 미국배당다우존스',
+  '448290': 'ACE 미국500밸류다우존스',
+  // SOL (신한자산운용)
+  '435420': 'SOL 미국배당다우존스',
+  // ARIRANG (한화자산운용)
+  '195930': 'ARIRANG S&P500',
+  // PLUS (우리자산운용)
+  '476550': 'PLUS 미국배당다우존스',
+  // 국내 대형주
+  '005930': '삼성전자',
+  '000660': 'SK하이닉스',
+  '035420': 'NAVER',
+  '035720': '카카오',
+  '005380': '현대자동차',
+  '051910': 'LG화학',
+  '006400': '삼성SDI',
+  '028260': '삼성물산',
+  '012330': '현대모비스',
+  '068270': '셀트리온',
+};
+
 async function lookupStockName(ticker) {
   if (nameCache[ticker]) return nameCache[ticker];
+
+  // 1순위: 내장 이름 맵 (한국 종목)
+  if (KR_NAMES[ticker]) {
+    nameCache[ticker] = KR_NAMES[ticker];
+    localStorage.setItem('tickerNames', JSON.stringify(nameCache));
+    return KR_NAMES[ticker];
+  }
+
   const isKorean = /^\d/.test(ticker);
   const yTicker  = isKorean ? ticker + '.KS' : ticker.toUpperCase();
+
+  // 2순위: Yahoo Finance Search API (CORS 허용률 높음)
   try {
     const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yTicker)}?range=1d&interval=1d`
+      `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(yTicker)}&quotesCount=5&newsCount=0&listsCount=0`,
+      { signal: AbortSignal.timeout(4000) }
     );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const meta = data.chart?.result?.[0]?.meta;
-    const name = meta?.shortName || meta?.longName || null;
-    if (name) {
-      nameCache[ticker] = name;
-      localStorage.setItem('tickerNames', JSON.stringify(nameCache));
+    if (res.ok) {
+      const data = await res.json();
+      const match = (data.quotes || []).find(
+        q => q.symbol?.toUpperCase() === yTicker.toUpperCase()
+      ) || data.quotes?.[0];
+      const name = match?.shortname || match?.longname;
+      if (name) {
+        nameCache[ticker] = name;
+        localStorage.setItem('tickerNames', JSON.stringify(nameCache));
+        return name;
+      }
     }
-    return name;
-  } catch {
-    return null;
-  }
+  } catch {}
+
+  // 3순위: Yahoo Finance Chart API
+  try {
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yTicker)}?range=1d&interval=1d`,
+      { signal: AbortSignal.timeout(4000) }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const meta = data.chart?.result?.[0]?.meta;
+      const name = meta?.shortName || meta?.longName;
+      if (name) {
+        nameCache[ticker] = name;
+        localStorage.setItem('tickerNames', JSON.stringify(nameCache));
+        return name;
+      }
+    }
+  } catch {}
+
+  return null;
 }
 
 function applyCustomPortfolio(portfolio) {
@@ -1323,7 +1399,7 @@ async function addTicker() {
     return;
   }
 
-  showToast('🔍 종목명 조회 중...', 1500);
+  showToast('🔍 종목명 조회 중...', 2000);
   const lookedUpName = await lookupStockName(ticker);
   const name = lookedUpName || ticker;
 
@@ -1331,6 +1407,12 @@ async function addTicker() {
   localStorage.setItem('customPortfolio', JSON.stringify(cp));
   setState({ customPortfolio: cp });
   if (input) input.value = '';
+
+  if (lookedUpName) {
+    showToast(`✅ ${lookedUpName}`);
+  } else {
+    showToast(`⚠️ 종목명을 찾지 못했습니다 (티커로 표시)`, 3000);
+  }
 }
 
 function removeTicker(idx) {
