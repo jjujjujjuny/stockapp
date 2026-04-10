@@ -12,9 +12,9 @@
   --card2:   #101028;
   --primary: #00d9f5;
   --pri-bg:  rgba(0,217,245,0.12);
-  --text:    #d4d4e8;
-  --muted:   #484870;
-  --border:  #18183a;
+  --text:    #e8e8f8;
+  --muted:   #9090c0;
+  --border:  #22224a;
   --green:   #1effc4;
   --red:     #ff3d71;
   --yellow:  #ffd166;
@@ -24,6 +24,12 @@
   --glow-p:  rgba(168,85,247,0.3);
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* 브라우저 폼 요소를 다크 모드로 강제 */
+html { color-scheme: dark; }
+input, select, textarea, button { color-scheme: dark; font-family: inherit; }
+option { background: #101028; color: #e8e8f8; }
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Noto Sans KR', sans-serif;
   background: var(--bg);
@@ -110,10 +116,10 @@ body {
 .asset-item:last-child { border-bottom: none; }
 .asset-dot   { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 6px currentColor; }
 .asset-info  { flex: 1; min-width: 0; }
-.asset-name  { font-size: 13px; font-weight: 700; line-height: 1.3; }
+.asset-name  { font-size: 13px; font-weight: 700; line-height: 1.3; color: var(--text); }
 .asset-meta  { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .asset-right { text-align: right; flex-shrink: 0; }
-.asset-value { font-size: 14px; font-weight: 700; }
+.asset-value { font-size: 14px; font-weight: 700; color: var(--text); }
 .asset-pct   { font-size: 11px; margin-top: 2px; }
 .badge-usd   { display: inline-block; font-size: 9px; font-weight: 700; background: rgba(0,217,245,0.12); color: var(--primary); padding: 1px 5px; border-radius: 4px; margin-left: 4px; vertical-align: middle; border: 1px solid rgba(0,217,245,0.25); }
 
@@ -126,13 +132,13 @@ body {
 .progress-pct   { font-size: 10px; width: 50px; text-align: right; flex-shrink: 0; color: var(--muted); }
 
 /* ── Section title / Divider ── */
-.section-title { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+.section-title { font-size: 16px; font-weight: 700; margin-bottom: 14px; color: var(--text); }
 .divider { height: 1px; background: var(--border); margin: 10px 0; }
 
 /* ── Dividend ── */
 .div-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .div-row:last-child { border-bottom: none; }
-.div-row-label { font-size: 13px; font-weight: 600; }
+.div-row-label { font-size: 13px; font-weight: 600; color: var(--text); }
 .div-row-sub   { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .div-amount    { font-size: 15px; font-weight: 700; color: var(--green); text-shadow: 0 0 8px rgba(30,255,196,0.4); }
 
@@ -164,13 +170,13 @@ body {
 .shares-zero { color: var(--muted); }
 .summary-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; }
 .summary-label { font-size: 13px; color: var(--muted); }
-.summary-value { font-size: 14px; font-weight: 700; }
+.summary-value { font-size: 14px; font-weight: 700; color: var(--text); }
 
 /* ── Goal ── */
 .goal-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .goal-row:last-child { border-bottom: none; }
 .goal-label { font-size: 13px; color: var(--muted); }
-.goal-value { font-size: 14px; font-weight: 700; }
+.goal-value { font-size: 14px; font-weight: 700; color: var(--text); }
 
 /* ── Buttons ── */
 .btn {
@@ -209,10 +215,10 @@ body {
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .text-input:focus { border-color: var(--primary); box-shadow: 0 0 10px var(--glow-c); }
-.settings-section { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 10px; }
+.settings-section { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--primary); opacity: 0.7; margin-bottom: 10px; }
 .div-setting-row { padding: 12px 0; border-bottom: 1px solid var(--border); }
 .div-setting-row:last-of-type { border-bottom: none; }
-.div-setting-name { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+.div-setting-name { font-size: 14px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
 .div-setting-sub  { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
 .div-setting-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
 .small-input {
@@ -690,7 +696,7 @@ function renderHome() {
         const fillW  = Math.min(a.current_pct / maxTgt * 100, 100);
         const tickW  = a.target_pct / maxTgt * 100;
         const cls    = fmt.pctClass(a.current_pct, a.target_pct);
-        const barClr = cls === 'over' ? '#f59e0b' : COLORS[i];
+        const barClr = cls === 'over' ? 'var(--yellow)' : COLORS[i];
 
         return h('div', { class: 'progress-row' },
           h('div', { class: 'progress-label' }, a.name.replace('TIGER ', '').replace('배당 ', '')),
@@ -830,7 +836,7 @@ function syncRebalanceResult(plan, budget) {
         h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
           h('div', { style: { width: '8px', height: '8px', borderRadius: '50%', background: COLORS[i], flexShrink: '0' } }),
           h('div', {},
-            h('div', { style: { fontWeight: '700', fontSize: '12px' } },
+            h('div', { style: { fontWeight: '700', fontSize: '12px', color: 'var(--text)' } },
               item.name,
               item.currency === 'USD' ? h('span', { class: 'badge-usd' }, 'USD') : null,
             ),
@@ -1039,7 +1045,7 @@ function renderSettings() {
   const holdingRows = assets.map(a =>
     h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 0', borderBottom: '1px solid var(--border)' } },
       h('div', { style: { flex: '1', minWidth: '0' } },
-        h('div', { style: { fontSize: '13px', fontWeight: '700' } }, a.name),
+        h('div', { style: { fontSize: '13px', fontWeight: '700', color: 'var(--text)' } }, a.name),
         h('div', { style: { fontSize: '11px', color: 'var(--muted)', marginTop: '2px' } }, a.ticker),
       ),
       h('input', {
