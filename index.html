@@ -504,7 +504,9 @@ let state = {
   customPortfolio: JSON.parse(localStorage.getItem('customPortfolio') || 'null'),
   divHistory:     JSON.parse(localStorage.getItem('divHistory') || '{}'),
   divSyncTime:    localStorage.getItem('divSyncTime') || null,
-  divSyncing:     false,
+  divSyncing:        false,
+  totalCashInvested: parseFloat(localStorage.getItem('totalCashInvested')) || 0,
+  lastDivReinvestYM: localStorage.getItem('lastDivReinvestYM') || null,
   loading:    false,
   error:      null,
   activeTab:  'home',
@@ -790,8 +792,8 @@ function renderHome() {
   const retCls    = profit >= 0 ? 'positive' : 'negative';
   const retSign   = profit >= 0 ? '+' : '';
 
-  // 실제 입금액 합계: 배당 재투자 제외한 순수 입금액
-  const totalCashInvested = (state.customPortfolio || []).reduce((s, r) => s + (Number(r.cash_invested) || 0), 0);
+  // 실제 총 입금액 (통장에서 직접 넣은 금액)
+  const totalCashInvested = state.totalCashInvested || 0;
   const hasCashReturn  = totalCashInvested > 0;
   const cashProfit     = total_value - totalCashInvested;
   const cashReturnPct  = totalCashInvested > 0 ? cashProfit / totalCashInvested * 100 : 0;
@@ -1381,8 +1383,7 @@ function renderSettings() {
   // 보유 수량 편집 행
   const holdingRows = assets.map(a => {
     const cp = state.customPortfolio?.find(c => c.ticker === a.ticker);
-    const avgPriceVal    = cp?.avg_price     || 0;
-    const cashInvestedVal = cp?.cash_invested || 0;
+    const avgPriceVal = cp?.avg_price || 0;
     return h('div', { style: { padding: '10px 0', borderBottom: '1px solid var(--border)' } },
       h('div', { style: { fontSize: '13px', fontWeight: '700', color: 'var(--text)', marginBottom: '6px' } }, a.name),
       h('div', { style: { fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' } }, a.ticker),
@@ -1410,20 +1411,6 @@ function renderSettings() {
         }),
         h('span', { class: 'pct-label' }, '원/주'),
       ),
-      h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '8px' } },
-        h('span', { class: 'field-label' }, '실제 입금액'),
-        h('input', {
-          type:  'number',
-          id:    `cash-${a.ticker}`,
-          class: 'small-input',
-          value: String(cashInvestedVal),
-          min:   '0',
-          step:  '1000',
-          style: { width: '130px', textAlign: 'right' },
-        }),
-        h('span', { class: 'pct-label' }, '원'),
-        h('span', { style: { fontSize: '11px', color: 'var(--muted)', marginLeft: '4px' } }, '(배당 재투자 제외)'),
-      ),
     );
   });
 
@@ -1435,6 +1422,20 @@ function renderSettings() {
       h('button', { class: 'btn btn-primary', 'data-action': 'save-holdings', style: { marginTop: '16px' } },
         '수량 · 단가 저장',
       ),
+    ),
+
+    h('div', { class: 'card' },
+      h('div', { class: 'settings-section' }, '실제 총 입금액'),
+      h('p', { style: { fontSize: '12px', color: 'var(--muted)', marginBottom: '14px' } },
+        '통장에서 실제로 입금한 총 금액을 입력하세요. 배당 재투자분은 제외합니다.',
+      ),
+      h('div', { class: 'input-group' },
+        h('label', { class: 'input-label' }, '총 입금액 (원)'),
+        h('input', { type: 'number', id: 'total-cash-invested-input', class: 'text-input',
+                     value: String(state.totalCashInvested || 0), min: '0', step: '10000',
+                     placeholder: '예: 5000000' }),
+      ),
+      h('button', { class: 'btn btn-primary', 'data-action': 'save-total-cash' }, '입금액 저장'),
     ),
 
     h('div', { class: 'card' },
@@ -1663,6 +1664,61 @@ function toKrw(amount, asset) {
 // ════════════════════════════════════════════════════════════════
 // BUSINESS LOGIC
 // ════════════════════════════════════════════════════════════════
+// ── 자동 배당 재투자 (월 1회) ─────────────────────────────────────
+async function applyDivReinvestment() {
+  const now   = new Date();
+  const thisYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  if (state.lastDivReinvestYM === thisYM) return;  // 이번 달 이미 처리됨
+
+  const assets = state.portfolio?.assets;
+  if (!assets?.length) return;
+
+  const thisM = now.getMonth() + 1;
+  const reinvestUpdates = [];
+  const toastLines = [];
+
+  for (const a of assets) {
+    const months = getEffDivMonths(a);
+    if (!months.includes(thisM)) continue;
+
+    // 이번 달 주당 배당금 (KRW 환산)
+    const hist = state.divHistory[a.ticker];
+    let divPerShareKrw = 0;
+    if (hist?.length > 0) {
+      const sameMonth = hist.filter(h => parseInt(h.ym.split('-')[1]) === thisM);
+      const raw = sameMonth.length > 0
+        ? sameMonth[sameMonth.length - 1].amount
+        : hist[hist.length - 1].amount;
+      divPerShareKrw = toKrw(raw, a);
+    } else {
+      divPerShareKrw = toKrw(a.div_per_share || 0, a);
+    }
+
+    if (divPerShareKrw <= 0 || !a.price) continue;
+
+    const totalDiv = a.shares * divPerShareKrw;
+    const newShares = Math.floor(totalDiv / a.price);
+    if (newShares <= 0) continue;
+
+    reinvestUpdates.push({ ticker: a.ticker, addShares: newShares });
+    toastLines.push(`${a.name}: +${newShares}주`);
+  }
+
+  // 이번 달 처리 완료 마킹 (재투자 종목 유무와 무관하게)
+  localStorage.setItem('lastDivReinvestYM', thisYM);
+  setState({ lastDivReinvestYM: thisYM });
+
+  if (reinvestUpdates.length === 0) return;
+
+  try {
+    await api.updateHoldings(reinvestUpdates);
+    showToast(`💰 배당 재투자 완료 (${thisYM})\n` + toastLines.join('\n'), 5000);
+    await fetchPortfolio();  // 수량 반영 후 화면 갱신
+  } catch (e) {
+    showToast('❌ 배당 재투자 업데이트 실패: ' + e.message, 4000);
+  }
+}
+
 async function fetchPortfolio() {
   if (state.loading) return;
   setState({ loading: true, error: null });
@@ -1718,17 +1774,15 @@ async function saveHoldings() {
     shares: parseFloat($id(`shares-${a.ticker}`)?.value) || 0,
   }));
 
-  // 평균단가·실제입금액도 customPortfolio에 저장
+  // 평균단가도 customPortfolio에 저장
   const cp = (state.customPortfolio || assets.map(a => ({
-    ticker:        a.ticker,
-    name:          nameCache[a.ticker] || a.name,
-    target_pct:    a.target_pct || 0,
-    avg_price:     a.avg_price  || 0,
-    cash_invested: 0,
+    ticker:     a.ticker,
+    name:       nameCache[a.ticker] || a.name,
+    target_pct: a.target_pct || 0,
+    avg_price:  a.avg_price  || 0,
   }))).map(r => ({
     ...r,
-    avg_price:     parseFloat($id(`havg-${r.ticker}`)?.value  ?? r.avg_price)     || 0,
-    cash_invested: parseFloat($id(`cash-${r.ticker}`)?.value  ?? r.cash_invested) || 0,
+    avg_price: parseFloat($id(`havg-${r.ticker}`)?.value ?? r.avg_price) || 0,
   }));
   localStorage.setItem('customPortfolio', JSON.stringify(cp));
   setState({ customPortfolio: cp });
@@ -1740,6 +1794,13 @@ async function saveHoldings() {
   } catch (e) {
     showToast('❌ 저장 실패: ' + e.message, 4000);
   }
+}
+
+function saveTotalCash() {
+  const val = parseFloat($id('total-cash-invested-input')?.value) || 0;
+  localStorage.setItem('totalCashInvested', String(val));
+  setState({ totalCashInvested: val });
+  showToast('✅ 총 입금액이 저장됐습니다.');
 }
 
 async function saveGasUrl() {
@@ -1828,7 +1889,7 @@ async function addTicker() {
   const lookedUpName = await lookupStockName(ticker);
   const name = lookedUpName || ticker;
 
-  cp.push({ ticker, name, target_pct: 0, avg_price: 0, cash_invested: 0 });
+  cp.push({ ticker, name, target_pct: 0, avg_price: 0 });
   localStorage.setItem('customPortfolio', JSON.stringify(cp));
   setState({ customPortfolio: cp });
   if (input) input.value = '';
@@ -1980,6 +2041,10 @@ $id('app').addEventListener('click', e => {
       saveHoldings();
       break;
 
+    case 'save-total-cash':
+      saveTotalCash();
+      break;
+
     case 'save-gas-url':
       saveGasUrl();
       break;
@@ -2011,7 +2076,9 @@ $id('app').addEventListener('click', e => {
 // ════════════════════════════════════════════════════════════════
 render();
 if (state.gasUrl) {
-  fetchPortfolio().then(() => {
+  fetchPortfolio().then(async () => {
+    // 자동 배당 재투자 (월 1회)
+    await applyDivReinvestment();
     // 마지막 동기화 후 6시간 이상 지났으면 자동 재동기화
     const lastSync = state.divSyncTime ? new Date(state.divSyncTime) : null;
     const hoursSince = lastSync ? (Date.now() - lastSync.getTime()) / 3_600_000 : Infinity;
