@@ -1357,24 +1357,37 @@ function renderSettings() {
   });
 
   // 보유 수량 편집 행
-  const holdingRows = assets.map(a =>
-    h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 0', borderBottom: '1px solid var(--border)' } },
-      h('div', { style: { flex: '1', minWidth: '0' } },
-        h('div', { style: { fontSize: '13px', fontWeight: '700', color: 'var(--text)' } }, a.name),
-        h('div', { style: { fontSize: '11px', color: 'var(--muted)', marginTop: '2px' } }, a.ticker),
+  const holdingRows = assets.map(a => {
+    const avgPriceVal = (state.customPortfolio?.find(c => c.ticker === a.ticker)?.avg_price) || 0;
+    return h('div', { style: { padding: '10px 0', borderBottom: '1px solid var(--border)' } },
+      h('div', { style: { fontSize: '13px', fontWeight: '700', color: 'var(--text)', marginBottom: '6px' } }, a.name),
+      h('div', { style: { fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' } }, a.ticker),
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' } },
+        h('span', { class: 'field-label' }, '수량'),
+        h('input', {
+          type:  'number',
+          id:    `shares-${a.ticker}`,
+          class: 'small-input',
+          value: String(a.shares ?? 0),
+          min:   '0',
+          step:  '1',
+          style: { width: '90px', textAlign: 'right' },
+        }),
+        h('span', { class: 'pct-label' }, '주'),
+        h('span', { class: 'field-label', style: { marginLeft: '8px' } }, '평균단가'),
+        h('input', {
+          type:  'number',
+          id:    `havg-${a.ticker}`,
+          class: 'small-input',
+          value: String(avgPriceVal),
+          min:   '0',
+          step:  '1',
+          style: { width: '100px', textAlign: 'right' },
+        }),
+        h('span', { class: 'pct-label' }, '원/주'),
       ),
-      h('input', {
-        type:  'number',
-        id:    `shares-${a.ticker}`,
-        class: 'small-input',
-        value: String(a.shares ?? 0),
-        min:   '0',
-        step:  '1',
-        style: { width: '100px', textAlign: 'right' },
-      }),
-      h('span', { style: { fontSize: '12px', color: 'var(--muted)', flexShrink: '0' } }, '주'),
-    ),
-  );
+    );
+  });
 
   setChildren(el,
     // 보유 수량 편집
@@ -1382,7 +1395,7 @@ function renderSettings() {
       h('div', { class: 'settings-section' }, '보유 수량 편집'),
       ...holdingRows,
       h('button', { class: 'btn btn-primary', 'data-action': 'save-holdings', style: { marginTop: '16px' } },
-        '수량 저장',
+        '수량 · 단가 저장',
       ),
     ),
 
@@ -1675,9 +1688,22 @@ async function saveHoldings() {
     shares: parseFloat($id(`shares-${a.ticker}`)?.value) || 0,
   }));
 
+  // 평균단가도 customPortfolio에 저장
+  const cp = (state.customPortfolio || assets.map(a => ({
+    ticker:     a.ticker,
+    name:       nameCache[a.ticker] || a.name,
+    target_pct: a.target_pct || 0,
+    avg_price:  a.avg_price  || 0,
+  }))).map(r => ({
+    ...r,
+    avg_price: parseFloat($id(`havg-${r.ticker}`)?.value ?? r.avg_price) || 0,
+  }));
+  localStorage.setItem('customPortfolio', JSON.stringify(cp));
+  setState({ customPortfolio: cp });
+
   try {
     await api.setHoldings(updates);
-    showToast('✅ 수량이 저장됐습니다.');
+    showToast('✅ 수량 · 단가가 저장됐습니다.');
     await fetchPortfolio();
   } catch (e) {
     showToast('❌ 저장 실패: ' + e.message, 4000);
