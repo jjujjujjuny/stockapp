@@ -247,6 +247,31 @@ body {
 .add-ticker-form { display: flex; gap: 8px; margin-top: 4px; }
 .add-ticker-form .num-input { flex: 1; font-size: 14px; padding: 10px 12px; }
 
+/* ── Portfolio editor (확장) ── */
+.ticker-row { flex-direction: column; align-items: stretch; gap: 0; }
+.ticker-row-top { display: flex; align-items: center; gap: 8px; }
+.ticker-row-bottom { display: flex; align-items: center; gap: 6px; padding: 6px 0 0 70px; flex-wrap: wrap; }
+.field-label { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+.avg-input {
+  width: 100px; padding: 6px 8px; font-size: 14px; font-weight: 700;
+  border: 1.5px solid var(--border); border-radius: 8px; text-align: right;
+  outline: none; color: var(--text); background: var(--card2);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.avg-input:focus { border-color: var(--primary); box-shadow: 0 0 8px var(--glow-c); }
+
+/* ── Total card 원금/평가금/수익률 ── */
+.total-stats {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid rgba(0,217,245,0.18);
+}
+.total-stat-item { text-align: center; }
+.total-stat-label { font-size: 10px; color: rgba(212,212,232,0.55); margin-bottom: 4px; letter-spacing: 0.3px; }
+.total-stat-value { font-size: 13px; font-weight: 800; color: rgba(255,255,255,0.9); line-height: 1.2; }
+.total-stat-value.positive { color: var(--green); text-shadow: 0 0 8px rgba(30,255,196,0.5); }
+.total-stat-value.negative { color: var(--red); text-shadow: 0 0 8px rgba(255,61,113,0.5); }
+
 /* ── States ── */
 .center-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px; gap: 14px; text-align: center; color: var(--muted); }
 .spinner { width: 36px; height: 36px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.7s linear infinite; box-shadow: 0 0 12px var(--glow-c); }
@@ -290,6 +315,44 @@ body {
   0%, 100% { transform: translateY(0px); }
   50%       { transform: translateY(-6px); }
 }
+
+/* ── Dividend history ── */
+.div-sync-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.div-sync-status { font-size: 11px; color: var(--muted); line-height: 1.4; }
+.sync-btn {
+  background: none; border: 1px solid var(--border); border-radius: 8px;
+  padding: 5px 12px; font-size: 12px; color: var(--muted); cursor: pointer;
+  transition: all 0.15s; flex-shrink: 0;
+}
+.sync-btn:active { background: var(--card2); border-color: var(--primary); color: var(--primary); }
+.div-ticker-hist { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--border); }
+.div-ticker-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.div-ticker-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.div-ticker-latest { font-size: 12px; color: var(--primary); font-weight: 700; }
+.div-hist-scroll { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+.div-hist-scroll::-webkit-scrollbar { height: 3px; }
+.div-hist-scroll::-webkit-scrollbar-track { background: transparent; }
+.div-hist-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.div-hist-item {
+  flex-shrink: 0; text-align: center; padding: 8px 10px;
+  border-radius: 8px; background: var(--card2);
+  border: 1px solid var(--border); min-width: 66px;
+}
+.div-hist-item.is-latest {
+  border-color: rgba(0,217,245,0.4); background: rgba(0,217,245,0.06);
+}
+.div-hist-ym   { font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+.div-hist-amt  { font-size: 13px; font-weight: 700; color: var(--text); }
+.div-hist-item.is-latest .div-hist-amt { color: var(--primary); }
+.div-hist-trend { font-size: 9px; margin-top: 3px; }
+.div-hist-trend.up { color: var(--green); }
+.div-hist-trend.dn { color: var(--red); }
+.div-hist-trend.eq { color: var(--muted); }
+.next-div-section { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(0,217,245,0.15); }
+.next-div-label { font-size: 11px; color: rgba(212,212,232,0.55); margin-bottom: 6px; }
+.next-div-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; }
+.next-div-name { font-size: 12px; color: rgba(212,212,232,0.8); }
+.next-div-amt  { font-size: 13px; font-weight: 700; color: var(--green); }
 </style>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
@@ -439,6 +502,9 @@ let state = {
   gasUrl:         localStorage.getItem('gasUrl') || 'https://script.google.com/macros/s/AKfycbwT6-SBuc65rOYvLlqH_QqpMojnF-QpfPi0lST2jILeAD8EWBesuVip-JsTrjPjXliPIg/exec',
   portfolio:      null,
   customPortfolio: JSON.parse(localStorage.getItem('customPortfolio') || 'null'),
+  divHistory:     JSON.parse(localStorage.getItem('divHistory') || '{}'),
+  divSyncTime:    localStorage.getItem('divSyncTime') || null,
+  divSyncing:     false,
   loading:    false,
   error:      null,
   activeTab:  'home',
@@ -565,7 +631,7 @@ function applyCustomPortfolio(portfolio) {
   const assets = portfolio.assets.map(a => {
     const custom = cp.find(c => c.ticker === a.ticker);
     if (!custom) return a;
-    return { ...a, target_pct: custom.target_pct, name: custom.name || a.name };
+    return { ...a, target_pct: custom.target_pct, name: custom.name || a.name, avg_price: custom.avg_price || 0 };
   });
   return { ...portfolio, assets };
 }
@@ -712,12 +778,38 @@ function renderHome() {
   const hasUSD = assets.some(a => a.currency === 'USD');
   const maxTgt = Math.max(...assets.map(a => a.target_pct)) * 1.5;
 
+  // 원금 계산: customPortfolio의 avg_price(원/주) × 보유수량
+  const principal = (state.customPortfolio || []).reduce((s, r) => {
+    const asset = assets.find(a => a.ticker === r.ticker);
+    const shares = asset ? asset.shares : 0;
+    return s + shares * (Number(r.avg_price) || 0);
+  }, 0);
+  const hasReturn = principal > 0;
+  const profit    = total_value - principal;
+  const returnPct = principal > 0 ? profit / principal * 100 : 0;
+  const retCls    = profit >= 0 ? 'positive' : 'negative';
+  const retSign   = profit >= 0 ? '+' : '';
+
   setChildren(el,
     // 총 자산
     h('div', { class: 'card total-card' },
       h('div', { class: 'card-label' }, '총 평가 자산 (원화 환산)'),
       h('div', { class: 'card-value' }, fmt.krw(total_value)),
       h('div', { class: 'card-sub'   }, `${assets.length}개 종목${hasUSD ? ' · USD 자산 포함' : ''}`),
+      hasReturn ? h('div', { class: 'total-stats' },
+        h('div', { class: 'total-stat-item' },
+          h('div', { class: 'total-stat-label' }, '투자 원금'),
+          h('div', { class: 'total-stat-value' }, fmt.krwC(principal)),
+        ),
+        h('div', { class: 'total-stat-item' },
+          h('div', { class: 'total-stat-label' }, '평가 손익'),
+          h('div', { class: `total-stat-value ${retCls}` }, `${retSign}${fmt.krwC(profit)}`),
+        ),
+        h('div', { class: 'total-stat-item' },
+          h('div', { class: 'total-stat-label' }, '수익률'),
+          h('div', { class: `total-stat-value ${retCls}` }, `${retSign}${returnPct.toFixed(2)}%`),
+        ),
+      ) : null,
     ),
 
     // 도넛 차트
@@ -793,29 +885,87 @@ function renderDividend() {
   if (!state.portfolio) { setChildren(el, noDataMsg()); return; }
 
   const { assets } = state.portfolio;
-  const now    = new Date();
-  const thisM  = now.getMonth() + 1;
-  const nextM  = thisM === 12 ? 1 : thisM + 1;
+  const now   = new Date();
+  const thisM = now.getMonth() + 1;
+  const thisY = now.getFullYear();
+  const nextM = thisM === 12 ? 1 : thisM + 1;
+  const nextY = thisM === 12 ? thisY + 1 : thisY;
   const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 
-  const monthDiv  = m => assets.reduce((s, a) => s + (a.div_months.includes(m) ? a.shares * a.div_per_share : 0), 0);
-  const annual    = assets.reduce((s, a) => s + a.shares * a.div_per_share * a.div_months.length, 0);
-  const monthly   = annual / 12;
-  const noPayers  = assets.every(a => a.div_per_share === 0);
+  // divHistory 우선, 없으면 GAS 값으로 계산
+  const monthDiv = m => assets.reduce((s, a) => {
+    const months = getEffDivMonths(a);
+    if (!months.includes(m)) return s;
+    // 이 월의 가장 최근 실적 찾기
+    const hist = state.divHistory[a.ticker];
+    if (hist && hist.length > 0) {
+      const sameMonth = hist.filter(h => parseInt(h.ym.split('-')[1]) === m);
+      const amt = sameMonth.length > 0
+        ? sameMonth[sameMonth.length - 1].amount
+        : hist[hist.length - 1].amount;
+      return s + a.shares * toKrw(amt, a);
+    }
+    return s + a.shares * toKrw(a.div_per_share, a);
+  }, 0);
 
+  const annual  = assets.reduce((s, a) => {
+    const months = getEffDivMonths(a);
+    return s + a.shares * toKrw(getEffDivPerShare(a), a) * months.length;
+  }, 0);
+  const monthly  = annual / 12;
+  const noPayers = assets.every(a => getEffDivPerShare(a) === 0);
+
+  // 다음 배당 예정 (향후 3개월 이내 지급 종목)
+  const upcomingItems = [];
+  assets.forEach(a => {
+    const months = getEffDivMonths(a);
+    const divps  = getEffDivPerShare(a);
+    if (!months.length || !divps) return;
+    // 이번달 포함 다음 3개월 탐색
+    for (let offset = 0; offset <= 3; offset++) {
+      const m = ((thisM - 1 + offset) % 12) + 1;
+      if (!months.includes(m)) continue;
+      const y = thisY + (thisM - 1 + offset >= 12 ? 1 : 0);
+      const ym = `${y}-${String(m).padStart(2,'0')}`;
+      // 이미 실제 기록이 있는 달은 "확정", 없으면 "예정"
+      const hist = state.divHistory[a.ticker];
+      const confirmed = hist?.some(h => h.ym === ym);
+      const sameMonthHist = hist?.filter(h => parseInt(h.ym.split('-')[1]) === m) || [];
+      const expectedAmt = sameMonthHist.length > 0
+        ? sameMonthHist[sameMonthHist.length - 1].amount
+        : divps;
+      upcomingItems.push({ a, m, y, ym, confirmed, expectedAmt });
+      break;
+    }
+  });
+  upcomingItems.sort((x, y) => x.ym.localeCompare(y.ym));
+
+  // 이번달/다음달 금액
+  const thisMonthTotal = monthDiv(thisM);
+  const nextMonthTotal = monthDiv(nextM);
+
+  // 월별 캘린더 행
   const calendarRows = Array.from({ length: 12 }, (_, i) => {
     const m      = i + 1;
     const amt    = monthDiv(m);
-    const payers = assets.filter(a => a.div_months.includes(m) && a.div_per_share > 0);
+    const payers = assets.filter(a => {
+      const months = getEffDivMonths(a);
+      return months.includes(m) && getEffDivPerShare(a) > 0;
+    });
     const mark   = m === thisM ? ' ← 이번달' : m === nextM ? ' ← 다음달' : '';
     const isThis = m === thisM;
-
     return h('div', { class: 'div-row' },
       h('div', {},
         h('div', { class: 'div-row-label', style: isThis ? { color: 'var(--primary)' } : {} }, MONTHS[i] + mark),
         h('div', { class: 'div-row-sub' },
           payers.length
-            ? payers.map(a => `${a.name.split(' ').pop()}(${a.shares}주×${fmt.krw(a.div_per_share)})`).join(', ')
+            ? payers.map(a => {
+                const hist = state.divHistory[a.ticker];
+                const sameM = hist?.filter(h => parseInt(h.ym.split('-')[1]) === m) || [];
+                const perShare = sameM.length > 0 ? sameM[sameM.length-1].amount : getEffDivPerShare(a);
+                const dispAmt = a.currency === 'USD' ? `$${perShare.toFixed(3)}` : fmt.krw(perShare);
+                return `${a.name.split(' ').pop()}(${a.shares}주×${dispAmt})`;
+              }).join(', ')
             : '배당 없음',
         ),
       ),
@@ -823,31 +973,120 @@ function renderDividend() {
     );
   });
 
+  // 종목별 배당 기록 카드 (divHistory 있는 종목만)
+  const histCards = assets.map(a => {
+    const hist = state.divHistory[a.ticker];
+    if (!hist || hist.length === 0) return null;
+    const last8 = hist.slice(-8);
+    const items = last8.map((entry, i) => {
+      const prev = last8[i - 1];
+      const trend = !prev ? 'eq'
+        : entry.amount > prev.amount + 0.001 ? 'up'
+        : entry.amount < prev.amount - 0.001 ? 'dn' : 'eq';
+      const icon  = trend === 'up' ? '▲' : trend === 'dn' ? '▼' : '─';
+      const isLatest = i === last8.length - 1;
+      const dispAmt = a.currency === 'USD'
+        ? `$${entry.amount.toFixed(3)}`
+        : entry.amount >= 1000 ? fmt.krwC(entry.amount) : `${entry.amount.toFixed(0)}원`;
+      return h('div', { class: `div-hist-item${isLatest ? ' is-latest' : ''}` },
+        h('div', { class: 'div-hist-ym' },   entry.ym.slice(2).replace('-', '/')),
+        h('div', { class: 'div-hist-amt' },   dispAmt),
+        h('div', { class: `div-hist-trend ${trend}` }, icon),
+      );
+    });
+    const latest = last8[last8.length - 1];
+    const latestDisp = a.currency === 'USD'
+      ? `$${latest.amount.toFixed(3)}/주`
+      : `${fmt.krw(latest.amount)}/주`;
+    return h('div', { class: 'div-ticker-hist' },
+      h('div', { class: 'div-ticker-head' },
+        h('span', { class: 'div-ticker-title' }, a.name.replace('TIGER ','').replace('KODEX ','')),
+        h('span', { class: 'div-ticker-latest' }, latestDisp),
+      ),
+      h('div', { class: 'div-hist-scroll' }, ...items),
+    );
+  }).filter(Boolean);
+
+  // 마지막 동기화 시각 표시
+  const syncTimeStr = state.divSyncTime
+    ? (() => {
+        const d = new Date(state.divSyncTime);
+        return `${d.getMonth()+1}/${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')} 업데이트됨`;
+      })()
+    : '동기화 안 됨';
+
+  // 다음 배당 예정 rows (최대 첫 2개 월 그룹)
+  const upcomingMonths = [...new Set(upcomingItems.map(x => x.ym))].slice(0, 2);
+  const nextDivSection = upcomingItems.length > 0
+    ? h('div', { class: 'next-div-section' },
+        ...upcomingMonths.map(ym => {
+          const group = upcomingItems.filter(x => x.ym === ym);
+          const total = group.reduce((s, x) => s + x.a.shares * toKrw(x.expectedAmt, x.a), 0);
+          const [y, m] = ym.split('-');
+          const label  = ym === `${thisY}-${String(thisM).padStart(2,'0')}` ? '이번 달' : `${m}월`;
+          return [
+            h('div', { class: 'next-div-label' }, `${label} 예상 배당 · 합계 ${fmt.krwC(total)}`),
+            ...group.map(x =>
+              h('div', { class: 'next-div-row' },
+                h('span', { class: 'next-div-name' },
+                  x.a.name.split(' ').pop() + ` (${x.a.shares}주)`,
+                  x.confirmed ? h('span', { style: { marginLeft: '4px', fontSize: '10px', color: 'var(--primary)' } }, '확정') : null,
+                ),
+                h('span', { class: 'next-div-amt' },
+                  x.a.currency === 'USD'
+                    ? `≈${fmt.krwC(x.a.shares * toKrw(x.expectedAmt, x.a))}`
+                    : fmt.krwC(x.a.shares * x.expectedAmt),
+                ),
+              ),
+            ),
+          ];
+        }).flat(),
+      )
+    : null;
+
   setChildren(el,
-    // 연간 총합
+    // 연간 총합 + 동기화 버튼
     h('div', { class: 'card total-card' },
-      h('div', { class: 'card-label' }, '연간 예상 배당금 (원화)'),
+      h('div', { class: 'div-sync-row' },
+        h('div', {},
+          h('div', { class: 'card-label' }, '연간 예상 배당금 (원화)'),
+          h('div', { class: 'div-sync-status' }, syncTimeStr),
+        ),
+        h('button', {
+          class: 'sync-btn', 'data-action': 'sync-dividends',
+          disabled: state.divSyncing,
+        }, state.divSyncing ? '⏳...' : '🔄 업데이트'),
+      ),
       h('div', { class: 'card-value' }, fmt.krw(annual)),
       h('div', { class: 'card-sub'   }, `월 평균 ${fmt.krwC(monthly)}`),
+      nextDivSection,
     ),
 
     // 이번달 / 다음달 요약
     h('div', { class: 'two-col' },
       h('div', { class: 'card' },
         h('div', { class: 'card-label' }, `이번 달 (${thisM}월)`),
-        h('div', { style: { fontSize: '18px', fontWeight: '800', color: 'var(--green)' } }, fmt.krwC(monthDiv(thisM))),
+        h('div', { style: { fontSize: '18px', fontWeight: '800', color: 'var(--green)' } }, fmt.krwC(thisMonthTotal)),
         h('div', { class: 'card-sub' },
-          assets.filter(a => a.div_months.includes(thisM) && a.div_per_share > 0).map(a => a.ticker).join(', ') || '해당없음',
+          assets.filter(a => getEffDivMonths(a).includes(thisM) && getEffDivPerShare(a) > 0).map(a => a.ticker).join(', ') || '해당없음',
         ),
       ),
       h('div', { class: 'card' },
         h('div', { class: 'card-label' }, `다음 달 (${nextM}월)`),
-        h('div', { style: { fontSize: '18px', fontWeight: '800', color: 'var(--green)' } }, fmt.krwC(monthDiv(nextM))),
+        h('div', { style: { fontSize: '18px', fontWeight: '800', color: 'var(--green)' } }, fmt.krwC(nextMonthTotal)),
         h('div', { class: 'card-sub' },
-          assets.filter(a => a.div_months.includes(nextM) && a.div_per_share > 0).map(a => a.ticker).join(', ') || '해당없음',
+          assets.filter(a => getEffDivMonths(a).includes(nextM) && getEffDivPerShare(a) > 0).map(a => a.ticker).join(', ') || '해당없음',
         ),
       ),
     ),
+
+    // 종목별 배당 기록
+    histCards.length > 0
+      ? h('div', { class: 'card' },
+          h('div', { class: 'section-title' }, '종목별 배당 기록'),
+          ...histCards,
+        )
+      : null,
 
     // 월별 캘린더
     h('div', { class: 'card' },
@@ -857,7 +1096,7 @@ function renderDividend() {
 
     noPayers
       ? h('div', { class: 'card', style: { textAlign: 'center', color: 'var(--muted)', fontSize: '13px' } },
-          '⚙️ 설정 탭에서 주당 배당금을 입력하면 배당금이 계산됩니다.',
+          '🔄 위 업데이트 버튼을 눌러 배당 데이터를 자동으로 가져오세요.',
         )
       : null,
   );
@@ -1187,6 +1426,7 @@ function renderPortfolioEditor() {
         ticker:     a.ticker,
         name:       nameCache[a.ticker] || a.name,
         target_pct: a.target_pct || 0,
+        avg_price:  a.avg_price  || 0,
       }));
 
   const totalPct = rows.reduce((s, r) => s + (Number(r.target_pct) || 0), 0);
@@ -1194,15 +1434,28 @@ function renderPortfolioEditor() {
 
   const rowEls = rows.map((row, i) =>
     h('div', { class: 'ticker-row' },
-      h('span', { class: 'ticker-badge' }, row.ticker),
-      h('div',  { class: 'ticker-name-cell' }, nameCache[row.ticker] || row.name || row.ticker),
-      h('input', {
-        type: 'number', class: 'pct-input',
-        id: `tgt-${row.ticker}`, min: '0', max: '100', step: '0.1',
-        value: String(row.target_pct),
-      }),
-      h('span', { class: 'pct-label' }, '%'),
-      h('button', { class: 'del-btn', 'data-action': 'remove-ticker', 'data-idx': String(i) }, '✕'),
+      h('div', { class: 'ticker-row-top' },
+        h('span', { class: 'ticker-badge' }, row.ticker),
+        h('div',  { class: 'ticker-name-cell' }, nameCache[row.ticker] || row.name || row.ticker),
+        h('button', { class: 'del-btn', 'data-action': 'remove-ticker', 'data-idx': String(i) }, '✕'),
+      ),
+      h('div', { class: 'ticker-row-bottom' },
+        h('span', { class: 'field-label' }, '목표비중'),
+        h('input', {
+          type: 'number', class: 'pct-input',
+          id: `tgt-${row.ticker}`, min: '0', max: '100', step: '0.1',
+          value: String(row.target_pct),
+        }),
+        h('span', { class: 'pct-label' }, '%'),
+        h('span', { class: 'field-label', style: { marginLeft: '10px' } }, '평균단가'),
+        h('input', {
+          type: 'number', class: 'avg-input',
+          id: `avg-${row.ticker}`, min: '0', step: '1',
+          value: String(row.avg_price || 0),
+          placeholder: '0',
+        }),
+        h('span', { class: 'pct-label' }, '원/주'),
+      ),
     )
   );
 
@@ -1266,6 +1519,95 @@ function showToast(msg, ms = 2500) {
   el.textContent = msg;
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), ms);
+}
+
+// ════════════════════════════════════════════════════════════════
+// DIVIDEND HISTORY — Yahoo Finance 자동 조회 + 로컬 기록
+// ════════════════════════════════════════════════════════════════
+
+// Yahoo Finance에서 최근 2년 배당 기록 가져오기
+async function fetchDividendHistory(ticker) {
+  const isKR   = /^\d/.test(ticker);
+  const yTicker = isKR ? ticker + '.KS' : ticker.toUpperCase();
+  try {
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yTicker)}?events=div&range=2y&interval=1mo`,
+      { signal: AbortSignal.timeout(6000) }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const divs = data.chart?.result?.[0]?.events?.dividends;
+    if (!divs) return null;
+    return Object.values(divs)
+      .map(d => {
+        const dt = new Date(d.date * 1000);
+        return {
+          ym:     `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`,
+          amount: d.amount,
+          source: 'auto',
+        };
+      })
+      .sort((a, b) => a.ym.localeCompare(b.ym));
+  } catch {
+    return null;
+  }
+}
+
+// 기존 기록과 새로 가져온 기록을 병합 (수동 입력은 유지)
+function mergeHistory(existing = [], fetched = []) {
+  const map = {};
+  existing.forEach(e => { map[e.ym] = e; });
+  fetched.forEach(f => {
+    if (!map[f.ym] || map[f.ym].source !== 'manual') map[f.ym] = f;
+  });
+  return Object.values(map).sort((a, b) => a.ym.localeCompare(b.ym));
+}
+
+// 전체 종목 배당 기록 동기화
+async function syncDividends(silent = false) {
+  const assets = state.portfolio?.assets;
+  if (!assets || state.divSyncing) return;
+  setState({ divSyncing: true });
+  if (!silent) showToast('🔄 배당 기록 조회 중...', 60000);
+
+  const history = { ...state.divHistory };
+  let updated = 0;
+
+  await Promise.all(assets.map(async a => {
+    const fetched = await fetchDividendHistory(a.ticker);
+    if (!fetched || fetched.length === 0) return;
+    history[a.ticker] = mergeHistory(history[a.ticker] || [], fetched);
+    updated++;
+  }));
+
+  const now = new Date().toISOString();
+  localStorage.setItem('divHistory', JSON.stringify(history));
+  localStorage.setItem('divSyncTime', now);
+  setState({ divHistory: history, divSyncTime: now, divSyncing: false });
+
+  if (!silent) showToast(updated > 0 ? `✅ ${updated}개 종목 배당 기록 업데이트됨` : '⚠️ 데이터를 가져오지 못했습니다.', 3000);
+}
+
+// divHistory에서 특정 종목의 최신 주당 배당금 반환 (없으면 GAS 값 fallback)
+function getEffDivPerShare(a) {
+  const hist = state.divHistory[a.ticker];
+  if (hist && hist.length > 0) return hist[hist.length - 1].amount;
+  return a.div_per_share || 0;
+}
+
+// divHistory에서 배당 지급 월 목록 추출 (없으면 GAS div_months fallback)
+function getEffDivMonths(a) {
+  const hist = state.divHistory[a.ticker];
+  if (hist && hist.length > 0) {
+    const months = [...new Set(hist.map(h => parseInt(h.ym.split('-')[1])))].sort((x, y) => x - y);
+    if (months.length > 0) return months;
+  }
+  return a.div_months || [];
+}
+
+// KRW 환산 (USD 자산은 환율 적용)
+function toKrw(amount, asset) {
+  return asset.currency === 'USD' ? amount * (state.portfolio?.usdkrw || 1350) : amount;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1369,11 +1711,13 @@ function getPortfolioRowsFromDOM() {
       ticker:     a.ticker,
       name:       nameCache[a.ticker] || a.name,
       target_pct: a.target_pct || 0,
+      avg_price:  a.avg_price  || 0,
     }));
   return cp.map(r => ({
     ...r,
-    name: nameCache[r.ticker] || r.name || r.ticker,  // 캐시된 정확한 이름 우선
+    name:       nameCache[r.ticker] || r.name || r.ticker,
     target_pct: parseFloat($id(`tgt-${r.ticker}`)?.value ?? r.target_pct) || 0,
+    avg_price:  parseFloat($id(`avg-${r.ticker}`)?.value ?? r.avg_price)  || 0,
   }));
 }
 
@@ -1419,7 +1763,7 @@ async function addTicker() {
   const lookedUpName = await lookupStockName(ticker);
   const name = lookedUpName || ticker;
 
-  cp.push({ ticker, name, target_pct: 0 });
+  cp.push({ ticker, name, target_pct: 0, avg_price: 0 });
   localStorage.setItem('customPortfolio', JSON.stringify(cp));
   setState({ customPortfolio: cp });
   if (input) input.value = '';
@@ -1590,6 +1934,10 @@ $id('app').addEventListener('click', e => {
     case 'remove-ticker':
       removeTicker(btn.dataset.idx);
       break;
+
+    case 'sync-dividends':
+      syncDividends(false);
+      break;
   }
 });
 
@@ -1597,7 +1945,14 @@ $id('app').addEventListener('click', e => {
 // INIT
 // ════════════════════════════════════════════════════════════════
 render();
-if (state.gasUrl) fetchPortfolio();
+if (state.gasUrl) {
+  fetchPortfolio().then(() => {
+    // 마지막 동기화 후 6시간 이상 지났으면 자동 재동기화
+    const lastSync = state.divSyncTime ? new Date(state.divSyncTime) : null;
+    const hoursSince = lastSync ? (Date.now() - lastSync.getTime()) / 3_600_000 : Infinity;
+    if (hoursSince >= 6) syncDividends(true);
+  });
+}
 
 </script>
 </body>
