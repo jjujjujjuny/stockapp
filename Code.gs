@@ -59,6 +59,7 @@ function doGet(e) {
     else if (action === 'updateHoldings')  data = updateHoldings(parseParam(e.parameter.data));
     else if (action === 'setHoldings')     data = setHoldings(parseParam(e.parameter.data));
     else if (action === 'updateConfig')    data = updateConfig(parseParam(e.parameter.data));
+    else if (action === 'getDividends')    data = getDividends(parseParam(e.parameter.data));
     else throw new Error('Unknown action: ' + action);
 
     return respond({ success: true, data });
@@ -234,6 +235,36 @@ function setHoldings(updates) {
     }
   }
   return { updated: updates.length };
+}
+
+// ── Yahoo Finance 배당 기록 프록시: tickers[] → {ticker: [{ym, amount, source}]} ──
+function getDividends(tickers) {
+  const results = {};
+  tickers.forEach(function(ticker) {
+    const isKR   = /^\d/.test(ticker);
+    const yTicker = isKR ? ticker + '.KS' : ticker.toUpperCase();
+    try {
+      const url = 'https://query1.finance.yahoo.com/v8/finance/chart/'
+        + encodeURIComponent(yTicker) + '?events=div&range=2y&interval=1mo';
+      const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+      if (res.getResponseCode() !== 200) return;
+      const data = JSON.parse(res.getContentText());
+      const divs = data.chart && data.chart.result && data.chart.result[0]
+        && data.chart.result[0].events && data.chart.result[0].events.dividends;
+      if (!divs) return;
+      results[ticker] = Object.values(divs).map(function(d) {
+        const dt = new Date(d.date * 1000);
+        return {
+          ym:     dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0'),
+          amount: d.amount,
+          source: 'auto',
+        };
+      }).sort(function(a, b) { return a.ym.localeCompare(b.ym); });
+    } catch(e) {
+      Logger.log('[getDividends] ' + ticker + ': ' + e);
+    }
+  });
+  return results;
 }
 
 // ── 배당/통화 설정 업데이트: [{ticker, div_per_share, div_months, currency}] ──

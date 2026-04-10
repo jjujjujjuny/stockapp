@@ -790,6 +790,14 @@ function renderHome() {
   const retCls    = profit >= 0 ? 'positive' : 'negative';
   const retSign   = profit >= 0 ? '+' : '';
 
+  // 실제 입금액 합계: 배당 재투자 제외한 순수 입금액
+  const totalCashInvested = (state.customPortfolio || []).reduce((s, r) => s + (Number(r.cash_invested) || 0), 0);
+  const hasCashReturn  = totalCashInvested > 0;
+  const cashProfit     = total_value - totalCashInvested;
+  const cashReturnPct  = totalCashInvested > 0 ? cashProfit / totalCashInvested * 100 : 0;
+  const cashRetCls     = cashProfit >= 0 ? 'positive' : 'negative';
+  const cashRetSign    = cashProfit >= 0 ? '+' : '';
+
   setChildren(el,
     // 총 자산
     h('div', { class: 'card total-card' },
@@ -808,6 +816,20 @@ function renderHome() {
         h('div', { class: 'total-stat-item' },
           h('div', { class: 'total-stat-label' }, '수익률'),
           h('div', { class: `total-stat-value ${retCls}` }, `${retSign}${returnPct.toFixed(2)}%`),
+        ),
+      ) : null,
+      hasCashReturn ? h('div', { class: 'total-stats', style: { marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' } },
+        h('div', { class: 'total-stat-item' },
+          h('div', { class: 'total-stat-label' }, '실제 입금액'),
+          h('div', { class: 'total-stat-value' }, fmt.krwC(totalCashInvested)),
+        ),
+        h('div', { class: 'total-stat-item' },
+          h('div', { class: 'total-stat-label' }, '입금 대비 손익'),
+          h('div', { class: `total-stat-value ${cashRetCls}` }, `${cashRetSign}${fmt.krwC(cashProfit)}`),
+        ),
+        h('div', { class: 'total-stat-item' },
+          h('div', { class: 'total-stat-label' }, '실제 수익률'),
+          h('div', { class: `total-stat-value ${cashRetCls}` }, `${cashRetSign}${cashReturnPct.toFixed(2)}%`),
         ),
       ) : null,
     ),
@@ -1358,7 +1380,9 @@ function renderSettings() {
 
   // 보유 수량 편집 행
   const holdingRows = assets.map(a => {
-    const avgPriceVal = (state.customPortfolio?.find(c => c.ticker === a.ticker)?.avg_price) || 0;
+    const cp = state.customPortfolio?.find(c => c.ticker === a.ticker);
+    const avgPriceVal    = cp?.avg_price     || 0;
+    const cashInvestedVal = cp?.cash_invested || 0;
     return h('div', { style: { padding: '10px 0', borderBottom: '1px solid var(--border)' } },
       h('div', { style: { fontSize: '13px', fontWeight: '700', color: 'var(--text)', marginBottom: '6px' } }, a.name),
       h('div', { style: { fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' } }, a.ticker),
@@ -1385,6 +1409,20 @@ function renderSettings() {
           style: { width: '100px', textAlign: 'right' },
         }),
         h('span', { class: 'pct-label' }, '원/주'),
+      ),
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '8px' } },
+        h('span', { class: 'field-label' }, '실제 입금액'),
+        h('input', {
+          type:  'number',
+          id:    `cash-${a.ticker}`,
+          class: 'small-input',
+          value: String(cashInvestedVal),
+          min:   '0',
+          step:  '1000',
+          style: { width: '130px', textAlign: 'right' },
+        }),
+        h('span', { class: 'pct-label' }, '원'),
+        h('span', { style: { fontSize: '11px', color: 'var(--muted)', marginLeft: '4px' } }, '(배당 재투자 제외)'),
       ),
     );
   });
@@ -1680,15 +1718,17 @@ async function saveHoldings() {
     shares: parseFloat($id(`shares-${a.ticker}`)?.value) || 0,
   }));
 
-  // 평균단가도 customPortfolio에 저장
+  // 평균단가·실제입금액도 customPortfolio에 저장
   const cp = (state.customPortfolio || assets.map(a => ({
-    ticker:     a.ticker,
-    name:       nameCache[a.ticker] || a.name,
-    target_pct: a.target_pct || 0,
-    avg_price:  a.avg_price  || 0,
+    ticker:        a.ticker,
+    name:          nameCache[a.ticker] || a.name,
+    target_pct:    a.target_pct || 0,
+    avg_price:     a.avg_price  || 0,
+    cash_invested: 0,
   }))).map(r => ({
     ...r,
-    avg_price: parseFloat($id(`havg-${r.ticker}`)?.value ?? r.avg_price) || 0,
+    avg_price:     parseFloat($id(`havg-${r.ticker}`)?.value  ?? r.avg_price)     || 0,
+    cash_invested: parseFloat($id(`cash-${r.ticker}`)?.value  ?? r.cash_invested) || 0,
   }));
   localStorage.setItem('customPortfolio', JSON.stringify(cp));
   setState({ customPortfolio: cp });
@@ -1788,7 +1828,7 @@ async function addTicker() {
   const lookedUpName = await lookupStockName(ticker);
   const name = lookedUpName || ticker;
 
-  cp.push({ ticker, name, target_pct: 0, avg_price: 0 });
+  cp.push({ ticker, name, target_pct: 0, avg_price: 0, cash_invested: 0 });
   localStorage.setItem('customPortfolio', JSON.stringify(cp));
   setState({ customPortfolio: cp });
   if (input) input.value = '';
