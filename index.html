@@ -7,34 +7,38 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
 :root {
-  --bg:       #07071a;
-  --card:     #0d0d20;
-  --card2:    #141428;
-  --primary:  #00d9f5;
-  --pri-bg:   rgba(0,217,245,0.09);
-  --text:     #ededf8;
-  --muted:    rgba(237,237,248,0.38);
-  --border:   rgba(255,255,255,0.07);
-  --border2:  rgba(255,255,255,0.12);
-  --green:    #00e08a;
-  --red:      #ff4560;
-  --yellow:   #ffb020;
-  --radius:   16px;
-  --shadow:   0 1px 3px rgba(0,0,0,0.4);
+  --bg:         #07071a;
+  --card:       #0d0d20;
+  --card2:      #141428;
+  --primary:    #00d9f5;
+  --pri-bg:     rgba(0,217,245,0.09);
+  --text:       #ededf8;
+  --muted:      rgba(237,237,248,0.38);
+  --border:     rgba(255,255,255,0.07);
+  --border2:    rgba(255,255,255,0.12);
+  --green:      #00e08a;
+  --red:        #ff4560;
+  --yellow:     #ffb020;
+  --radius:     16px;
+  --shadow:     0 1px 3px rgba(0,0,0,0.4);
+  --header-bg:  rgba(7,7,26,0.94);
+  --nav-bg:     rgba(7,7,26,0.97);
 }
 [data-theme="light"] {
-  --bg:      #f4f4f8;
-  --card:    #ffffff;
-  --card2:   #eeeef4;
-  --pri-bg:  rgba(0,180,210,0.09);
-  --text:    #111120;
-  --muted:   rgba(17,17,32,0.42);
-  --border:  rgba(0,0,0,0.07);
-  --border2: rgba(0,0,0,0.13);
-  --primary: #009ab5;
-  --green:   #00a86b;
-  --red:     #e03050;
-  --yellow:  #d08800;
+  --bg:         #f4f4f8;
+  --card:       #ffffff;
+  --card2:      #eeeef4;
+  --pri-bg:     rgba(0,180,210,0.09);
+  --text:       #111120;
+  --muted:      rgba(17,17,32,0.42);
+  --border:     rgba(0,0,0,0.07);
+  --border2:    rgba(0,0,0,0.13);
+  --primary:    #009ab5;
+  --green:      #00a86b;
+  --red:        #e03050;
+  --yellow:     #d08800;
+  --header-bg:  rgba(244,244,248,0.94);
+  --nav-bg:     rgba(244,244,248,0.97);
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -58,7 +62,7 @@ body {
 /* ── Header ── */
 .header {
   position: sticky; top: 0; z-index: 50;
-  background: rgba(7,7,26,0.94);
+  background: var(--header-bg);
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
   padding: 0 16px;
@@ -80,7 +84,7 @@ body {
 /* ── Tab bar ── */
 .tab-bar {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
-  background: rgba(7,7,26,0.97);
+  background: var(--nav-bg);
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--border);
   display: flex; padding-bottom: env(safe-area-inset-bottom, 0);
