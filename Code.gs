@@ -140,8 +140,8 @@ function getPortfolio() {
     const shares    = holdMap[ticker] || 0;
     const avg_price = avgMap[ticker]  || 0;
 
-    // 네이버에서 가져온 이름 우선, 없으면 Config 시트 이름
-    const name      = naverData[ticker]?.name || cfgName;
+    // Config 시트 이름을 사용 (네이버 nm 필드는 EUC-KR 인코딩 문제로 사용하지 않음)
+    const name      = cfgName;
     const priceOrig = naverData[ticker]?.price || 0;
     const priceKRW  = currency === 'USD' && usdkrw ? priceOrig * usdkrw : priceOrig;
     const divPerShareKRW = currency === 'USD' && usdkrw ? div_per_share * usdkrw : div_per_share;
@@ -205,26 +205,26 @@ function getFallbackUSDKRW() {
   }
 }
 
-// ── Naver Finance 실시간 가격 + 종목명 조회 ─────────────────────
+// ── Naver Finance 실시간 가격 조회 ──────────────────────────────
+// 종목명은 네이버 API의 nm 필드가 EUC-KR로 인코딩되어 깨질 수 있으므로
+// 가격만 사용하고, 이름은 Config 시트 값을 사용한다.
 function fetchNaverData(ticker) {
   try {
     const url = `https://polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:${ticker}`;
     const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    if (res.getResponseCode() !== 200) return { price: 0, name: null };
+    if (res.getResponseCode() !== 200) return { price: 0 };
 
     const json  = JSON.parse(res.getContentText());
     const datas = json?.result?.areas?.[0]?.datas;
-    if (!datas?.length) return { price: 0, name: null };
+    if (!datas?.length) return { price: 0 };
 
     const item  = datas[0];
     const raw   = item.nv || item.sv || item.pv || item.closePrice || '0';
     const price = parseFloat(String(raw).replace(/,/g, '')) || 0;
-    // nm = 종목명 (네이버 API 표준 필드)
-    const name  = item.nm || item.itemName || item.stockName || null;
-    return { price, name };
+    return { price };
   } catch (e) {
     Logger.log(`[fetchNaverData] ${ticker}: ${e}`);
-    return { price: 0, name: null };
+    return { price: 0 };
   }
 }
 

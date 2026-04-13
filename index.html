@@ -585,6 +585,15 @@ const KR_NAMES = {
   '068270': '셀트리온',
 };
 
+// KR_NAMES로 nameCache의 잘못된(깨진) 이름 덮어쓰기 (앱 시작 시 1회)
+(function() {
+  let changed = false;
+  for (const [ticker, name] of Object.entries(KR_NAMES)) {
+    if (nameCache[ticker] !== name) { nameCache[ticker] = name; changed = true; }
+  }
+  if (changed) localStorage.setItem('tickerNames', JSON.stringify(nameCache));
+})();
+
 async function lookupStockName(ticker) {
   // 1순위: 내장 이름 맵 (코드상 수정된 이름을 무조건 최우선 적용)
   // 이렇게 해야 캐시나 API 결과에 상관없이 내가 수정한 이름이 즉시 반영됩니다.
@@ -1745,20 +1754,13 @@ async function fetchPortfolio() {
     // ③ 커스텀 포트폴리오 오버라이드 (target_pct, name, avg_price)
     portfolio = applyCustomPortfolio(portfolio);
 
-    // ④ 이름: GAS(네이버)에서 온 이름 우선, 캐시 사용 안 함
-    //    (GAS가 네이버 정확한 이름을 주므로 덮어쓰지 않음)
+    // ④ 이름: KR_NAMES(내장 맵) 우선 → GAS Config 시트 → nameCache 순
+    //    GAS가 Config 시트 이름을 그대로 반환하므로 nameCache에는 저장하지 않음
+    //    (이전에 깨진 이름이 캐시에 남아있을 수 있으므로 KR_NAMES로 덮어씀)
     portfolio.assets = portfolio.assets.map(a => ({
       ...a,
-      // nameCache에 있으면 사용하되, GAS 이름이 더 최신이므로 갱신
-      name: a.name,
+      name: KR_NAMES[a.ticker] || a.name,
     }));
-    // nameCache 갱신 (GAS에서 온 이름으로 업데이트)
-    portfolio.assets.forEach(a => {
-      if (a.name && a.name !== a.ticker) {
-        nameCache[a.ticker] = a.name;
-      }
-    });
-    localStorage.setItem('tickerNames', JSON.stringify(nameCache));
 
     setState({ portfolio, loading: false, totalCashInvested: state.totalCashInvested });
 
