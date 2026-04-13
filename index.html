@@ -414,11 +414,11 @@ body {
 const COLORS = ['#00d9f5', '#a855f7', '#1effc4', '#ff6b35', '#ff3d71', '#ffd166'];
 
 const DEFAULT_ASSETS = [
-  { ticker: '0072R0', name: 'TIGER KRX금현물',       shares: 0, div_per_share_orig: 0, div_months: [],                             currency: 'KRW' },
-  { ticker: '379810', name: 'TIGER 미국나스닥100',        shares: 0, div_per_share_orig: 0, div_months: [],                             currency: 'KRW' },
-  { ticker: '379800', name: 'TIGER 미국S&P500',           shares: 0, div_per_share_orig: 0, div_months: [],                             currency: 'KRW' },
-  { ticker: '441640', name: 'KODEX 미국배당프리미엄액티브',   shares: 0, div_per_share_orig: 0, div_months: [1,2,3,4,5,6,7,8,9,10,11,12],  currency: 'KRW' },
-  { ticker: '458730', name: 'TIGER 미국배당다우존스',            shares: 0, div_per_share_orig: 0, div_months: [1,2,3,4,5,6,7,8,9,10,11,12], currency: 'KRW' },
+  { ticker: '0072R0', name: 'TIGER KRX금현물',                              shares: 0, div_per_share_orig: 0, div_months: [],                             currency: 'KRW' },
+  { ticker: '379810', name: 'TIGER 나스닥100',                               shares: 0, div_per_share_orig: 0, div_months: [],                             currency: 'KRW' },
+  { ticker: '379800', name: 'TIGER S&P500',                                  shares: 0, div_per_share_orig: 0, div_months: [],                             currency: 'KRW' },
+  { ticker: '441640', name: 'TIGER 미국배당다우존스타겟데일리커버드콜',      shares: 0, div_per_share_orig: 0, div_months: [1,2,3,4,5,6,7,8,9,10,11,12],  currency: 'KRW' },
+  { ticker: '458730', name: 'TIGER 미국배당다우존스',                        shares: 0, div_per_share_orig: 0, div_months: [1,2,3,4,5,6,7,8,9,10,11,12], currency: 'KRW' },
 ];
 
 // ════════════════════════════════════════════════════════════════
@@ -504,17 +504,18 @@ const api = {
   updateHoldings: data => api._get('updateHoldings', data),
   setHoldings:    data => api._get('setHoldings',    data),
   updateConfig:   data => api._get('updateConfig',   data),
+  saveUserData:   data => api._get('saveUserData',   data),
 };
 
 // ════════════════════════════════════════════════════════════════
 // STATE + 단방향 렌더링
 // ════════════════════════════════════════════════════════════════
 let state = {
-  gasUrl:         localStorage.getItem('gasUrl') || 'https://script.google.com/macros/s/AKfycbwT6-SBuc65rOYvLlqH_QqpMojnF-QpfPi0lST2jILeAD8EWBesuVip-JsTrjPjXliPIg/exec',
-  portfolio:      null,
-  customPortfolio: JSON.parse(localStorage.getItem('customPortfolio') || 'null'),
-  divHistory:     JSON.parse(localStorage.getItem('divHistory') || '{}'),
-  divSyncTime:    localStorage.getItem('divSyncTime') || null,
+  gasUrl:            localStorage.getItem('gasUrl') || 'https://script.google.com/macros/s/AKfycbwT6-SBuc65rOYvLlqH_QqpMojnF-QpfPi0lST2jILeAD8EWBesuVip-JsTrjPjXliPIg/exec',
+  portfolio:         null,
+  customPortfolio:   JSON.parse(localStorage.getItem('customPortfolio') || 'null'),
+  divHistory:        JSON.parse(localStorage.getItem('divHistory') || '{}'),
+  divSyncTime:       localStorage.getItem('divSyncTime') || null,
   divSyncing:        false,
   totalCashInvested: parseFloat(localStorage.getItem('totalCashInvested')) || 0,
   divReinvestLog:    JSON.parse(localStorage.getItem('divReinvestLog') || '{}'),
@@ -632,17 +633,9 @@ function applyCustomPortfolio(portfolio) {
   const assets = portfolio.assets.map(a => {
     const custom = cp.find(c => c.ticker === a.ticker);
     if (!custom) return a;
-
-    // 💡 중요: KR_NAMES에 정의된 정확한 이름이 있다면 그걸 먼저 쓰고, 
-    // 없으면 커스텀 이름, 그것도 없으면 기본 이름을 씁니다.
-    const correctedName = KR_NAMES[a.ticker] || custom.name || a.name;
-
-    return { 
-      ...a, 
-      target_pct: custom.target_pct, 
-      name: correctedName, 
-      avg_price: custom.avg_price || 0 
-    };
+    // GAS(네이버 실시간) → KR_NAMES(내장 맵) → 커스텀 이름 순으로 우선 적용
+    const correctedName = a.name || KR_NAMES[a.ticker] || custom.name;
+    return { ...a, target_pct: custom.target_pct, name: correctedName, avg_price: custom.avg_price || a.avg_price || 0 };
   });
   return { ...portfolio, assets };
 }
@@ -1722,17 +1715,54 @@ async function fetchPortfolio() {
   setState({ loading: true, error: null });
   try {
     let portfolio = await api.getPortfolio();
-    // 커스텀 포트폴리오 오버라이드 (target_pct, name)
+
+    // ① GAS userData에서 totalCashInvested 동기화 (GAS → 앱)
+    if (portfolio.userData?.totalCashInvested !== undefined) {
+      const gasVal = Number(portfolio.userData.totalCashInvested) || 0;
+      // GAS 값이 있거나 로컬에 값이 없으면 GAS 값 사용
+      if (gasVal > 0 || !state.totalCashInvested) {
+        localStorage.setItem('totalCashInvested', String(gasVal));
+        state.totalCashInvested = gasVal; // patch 후 setState에서 반영
+      }
+    }
+
+    // ② GAS assets의 avg_price를 customPortfolio에 반영
+    if (portfolio.assets) {
+      const gasAvgMap = {};
+      portfolio.assets.forEach(a => { if (a.avg_price) gasAvgMap[a.ticker] = a.avg_price; });
+
+      let cp = state.customPortfolio;
+      if (cp && Object.keys(gasAvgMap).length > 0) {
+        cp = cp.map(r => ({
+          ...r,
+          avg_price: gasAvgMap[r.ticker] ?? r.avg_price ?? 0,
+        }));
+        localStorage.setItem('customPortfolio', JSON.stringify(cp));
+        state.customPortfolio = cp;
+      }
+    }
+
+    // ③ 커스텀 포트폴리오 오버라이드 (target_pct, name, avg_price)
     portfolio = applyCustomPortfolio(portfolio);
-    // 캐시된 이름 적용
+
+    // ④ 이름: GAS(네이버)에서 온 이름 우선, 캐시 사용 안 함
+    //    (GAS가 네이버 정확한 이름을 주므로 덮어쓰지 않음)
     portfolio.assets = portfolio.assets.map(a => ({
       ...a,
-      name: nameCache[a.ticker] || a.name,
+      // nameCache에 있으면 사용하되, GAS 이름이 더 최신이므로 갱신
+      name: a.name,
     }));
-    setState({ portfolio, loading: false });
+    // nameCache 갱신 (GAS에서 온 이름으로 업데이트)
+    portfolio.assets.forEach(a => {
+      if (a.name && a.name !== a.ticker) {
+        nameCache[a.ticker] = a.name;
+      }
+    });
+    localStorage.setItem('tickerNames', JSON.stringify(nameCache));
 
-    // 백그라운드: 캐시 없는 종목 이름 조회 후 갱신
-    // customPortfolio 티커도 포함 (GAS에 없는 종목 대비)
+    setState({ portfolio, loading: false, totalCashInvested: state.totalCashInvested });
+
+    // ⑤ 백그라운드: 캐시 없는 종목(GAS 없는 종목) 이름 Yahoo Finance 조회
     const allTickers = [
       ...portfolio.assets.map(a => a.ticker),
       ...(state.customPortfolio || []).map(r => r.ticker),
@@ -1741,12 +1771,10 @@ async function fetchPortfolio() {
     if (toLookup.length > 0) {
       Promise.all(toLookup.map(t => lookupStockName(t))).then(() => {
         if (!state.portfolio) return;
-        // portfolio 이름 갱신
         const enriched = state.portfolio.assets.map(a => ({
           ...a,
           name: nameCache[a.ticker] || a.name,
         }));
-        // customPortfolio 이름도 갱신해 저장 (틀린 이름 자동 수정)
         const updatedCp = state.customPortfolio?.map(r => ({
           ...r,
           name: nameCache[r.ticker] || r.name,
@@ -1767,17 +1795,19 @@ async function saveHoldings() {
   if (!state.gasUrl) { showToast('먼저 GAS URL을 저장해주세요.'); return; }
   const assets = state.portfolio?.assets?.length ? state.portfolio.assets : DEFAULT_ASSETS;
 
+  // shares + avg_price 모두 GAS에 전송
   const updates = assets.map(a => ({
-    ticker: a.ticker,
-    shares: parseFloat($id(`shares-${a.ticker}`)?.value) || 0,
+    ticker:    a.ticker,
+    shares:    parseFloat($id(`shares-${a.ticker}`)?.value) || 0,
+    avg_price: parseFloat($id(`havg-${a.ticker}`)?.value)   || 0,
   }));
 
-  // 평균단가도 customPortfolio에 저장
+  // customPortfolio 로컬에도 동기화
   const cp = (state.customPortfolio || assets.map(a => ({
     ticker:     a.ticker,
     name:       nameCache[a.ticker] || a.name,
     target_pct: a.target_pct || 0,
-    avg_price:  a.avg_price  || 0,
+    avg_price:  0,
   }))).map(r => ({
     ...r,
     avg_price: parseFloat($id(`havg-${r.ticker}`)?.value ?? r.avg_price) || 0,
@@ -1786,6 +1816,7 @@ async function saveHoldings() {
   setState({ customPortfolio: cp });
 
   try {
+    // GAS Holdings 시트에 shares + avg_price 저장
     await api.setHoldings(updates);
     showToast('✅ 수량 · 단가가 저장됐습니다.');
     await fetchPortfolio();
@@ -1794,11 +1825,22 @@ async function saveHoldings() {
   }
 }
 
-function saveTotalCash() {
+async function saveTotalCash() {
   const val = parseFloat($id('total-cash-invested-input')?.value) || 0;
   localStorage.setItem('totalCashInvested', String(val));
   setState({ totalCashInvested: val });
-  showToast('✅ 총 입금액이 저장됐습니다.');
+
+  // GAS UserData 시트에도 저장
+  if (state.gasUrl) {
+    try {
+      await api.saveUserData({ totalCashInvested: val });
+      showToast('✅ 총 입금액이 저장됐습니다.');
+    } catch (e) {
+      showToast('⚠️ 로컬 저장 완료 (GAS 저장 실패: ' + e.message + ')', 4000);
+    }
+  } else {
+    showToast('✅ 총 입금액이 저장됐습니다. (로컬)');
+  }
 }
 
 async function saveGasUrl() {
