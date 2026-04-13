@@ -5,7 +5,7 @@
  * 1. Google Sheets에서 Extensions > Apps Script 열기
  * 2. 이 코드 전체 붙여넣기 (기존 내용 교체)
  * 3. 상단 메뉴에서 initSheets 함수 선택 후 ▶ 실행 (최초 1회)
- *    → Holdings 시트, Config 시트 자동 생성
+ *    → Holdings 시트, Config 시트, UserData 시트 자동 생성
  * 4. Deploy > New deployment > Web App
  *    - Execute as: Me
  *    - Who has access: Anyone
@@ -14,11 +14,18 @@
  * ── Config 시트 컬럼 구조 ───────────────────────────────────────
  * ticker | name | target_pct | div_per_share | div_months | currency
  * currency: KRW(기본) 또는 USD (달러 자산은 실시간 환율 자동 적용)
+ *
+ * ── Holdings 시트 컬럼 구조 ────────────────────────────────────
+ * ticker | shares | avg_price
+ *
+ * ── UserData 시트 컬럼 구조 ────────────────────────────────────
+ * key | value
  * ────────────────────────────────────────────────────────────────
  */
 
 const HOLDINGS_SHEET = 'Holdings';
 const CONFIG_SHEET   = 'Config';
+const USERDATA_SHEET = 'UserData';
 
 // ── 최초 시트 초기화 (1회만 실행) ───────────────────────────────
 function initSheets() {
@@ -29,22 +36,29 @@ function initSheets() {
   cfg.clearContents();
   cfg.getRange('A1:F1').setValues([['ticker','name','target_pct','div_per_share','div_months','currency']]);
   cfg.getRange('A2:F6').setValues([
-    ['0072R0', 'TIGER KRX금현물',       10, 0, '',                                        'KRW'],
-    ['379810', 'TIGER 나스닥100',        10, 0, '',                                        'KRW'],
-    ['379800', 'TIGER S&P500',           20, 0, '',                                        'KRW'],
-    ['441640', '배당 액티브커버드콜',    30, 0, '1,2,3,4,5,6,7,8,9,10,11,12',             'KRW'],
-    ['458730', '배당 성장주',            30, 0, '1,2,3,4,5,6,7,8,9,10,11,12',             'KRW'],
+    ['0072R0', 'TIGER KRX금현물',             10, 0, '',                              'KRW'],
+    ['379810', 'KODEX 미국나스닥100',          10, 0, '',                              'KRW'],
+    ['379800', 'KODEX 미국S&P500',             20, 0, '',                              'KRW'],
+    ['441640', 'KODEX 미국배당커버드콜액티브', 30, 0, '1,2,3,4,5,6,7,8,9,10,11,12',  'KRW'],
+    ['458730', 'TIGER 미국배당다우존스',       30, 0, '1,2,3,4,5,6,7,8,9,10,11,12',  'KRW'],
   ]);
   cfg.setFrozenRows(1);
 
-  // Holdings 시트: ticker | shares
+  // Holdings 시트: ticker | shares | avg_price
   let hld = ss.getSheetByName(HOLDINGS_SHEET) || ss.insertSheet(HOLDINGS_SHEET);
   hld.clearContents();
-  hld.getRange('A1:B1').setValues([['ticker','shares']]);
-  hld.getRange('A2:B6').setValues([
-    ['0072R0', 0], ['379810', 0], ['379800', 0], ['441640', 0], ['458730', 0],
+  hld.getRange('A1:C1').setValues([['ticker','shares','avg_price']]);
+  hld.getRange('A2:C6').setValues([
+    ['0072R0', 0, 0], ['379810', 0, 0], ['379800', 0, 0], ['441640', 0, 0], ['458730', 0, 0],
   ]);
   hld.setFrozenRows(1);
+
+  // UserData 시트: key | value
+  let ud = ss.getSheetByName(USERDATA_SHEET) || ss.insertSheet(USERDATA_SHEET);
+  ud.clearContents();
+  ud.getRange('A1:B1').setValues([['key','value']]);
+  ud.getRange('A2:B2').setValues([['totalCashInvested', 0]]);
+  ud.setFrozenRows(1);
 
   SpreadsheetApp.getUi().alert('✅ 초기화 완료!\n\nDeploy > New deployment > Web App으로 배포하세요.');
 }
@@ -60,6 +74,7 @@ function doGet(e) {
     else if (action === 'setHoldings')     data = setHoldings(parseParam(e.parameter.data));
     else if (action === 'updateConfig')    data = updateConfig(parseParam(e.parameter.data));
     else if (action === 'getDividends')    data = getDividends(parseParam(e.parameter.data));
+    else if (action === 'saveUserData')    data = saveUserData(parseParam(e.parameter.data));
     else throw new Error('Unknown action: ' + action);
 
     return respond({ success: true, data });
@@ -80,30 +95,41 @@ function respond(obj) {
 
 // ── 포트폴리오 조회 ──────────────────────────────────────────────
 function getPortfolio() {
-  const ss      = SpreadsheetApp.getActiveSpreadsheet();
-  const cfgRows = ss.getSheetByName(CONFIG_SHEET)  .getDataRange().getValues().slice(1);
-  const hldRows = ss.getSheetByName(HOLDINGS_SHEET).getDataRange().getValues().slice(1);
+  const ss       = SpreadsheetApp.getActiveSpreadsheet();
+  const cfgRows  = ss.getSheetByName(CONFIG_SHEET).getDataRange().getValues().slice(1);
+  const hldSheet = ss.getSheetByName(HOLDINGS_SHEET);
 
-  // 보유수량 맵
+  // Holdings 시트에 avg_price 컬럼 없으면 자동 추가
+  ensureAvgPriceColumn(hldSheet);
+  const hldRows = hldSheet.getDataRange().getValues().slice(1);
+
+  // 보유수량 + 평균단가 맵
   const holdMap = {};
-  hldRows.forEach(r => { holdMap[String(r[0])] = Number(r[1]) || 0; });
+  const avgMap  = {};
+  hldRows.forEach(r => {
+    holdMap[String(r[0])] = Number(r[1]) || 0;
+    avgMap[String(r[0])]  = Number(r[2]) || 0;
+  });
 
   // USD 자산 존재 시 환율 조회
   const hasUSD = cfgRows.some(r => String(r[5]).toUpperCase() === 'USD');
   const usdkrw = hasUSD ? fetchUSDKRW() : null;
 
-  // 실시간 가격 조회
-  const prices = {};
+  // 실시간 가격 + 종목명 조회 (네이버)
+  const naverData = {};
   cfgRows.forEach(r => {
     const ticker = String(r[0]);
-    prices[ticker] = fetchNaverPrice(ticker);
+    naverData[ticker] = fetchNaverData(ticker);
     Utilities.sleep(150);
   });
+
+  // UserData 조회
+  const userData = getUserDataObj();
 
   // 자산 목록 구성
   const assets = cfgRows.map(r => {
     const ticker        = String(r[0]);
-    const name          = String(r[1]);
+    const cfgName       = String(r[1]);
     const target_pct    = Number(r[2]);
     const div_per_share = Number(r[3]) || 0;
     const divStr        = r[4] ? String(r[4]) : '';
@@ -112,23 +138,23 @@ function getPortfolio() {
       : [];
     const currency  = r[5] ? String(r[5]).toUpperCase() : 'KRW';
     const shares    = holdMap[ticker] || 0;
-    const priceOrig = prices[ticker] || 0;           // 원래 통화 기준 가격
-    const priceKRW  = currency === 'USD' && usdkrw   // 원화 환산 가격 (계산용)
-      ? priceOrig * usdkrw
-      : priceOrig;
-    // 배당금도 USD면 원화 환산
-    const divPerShareKRW = currency === 'USD' && usdkrw
-      ? div_per_share * usdkrw
-      : div_per_share;
+    const avg_price = avgMap[ticker]  || 0;
+
+    // 네이버에서 가져온 이름 우선, 없으면 Config 시트 이름
+    const name      = naverData[ticker]?.name || cfgName;
+    const priceOrig = naverData[ticker]?.price || 0;
+    const priceKRW  = currency === 'USD' && usdkrw ? priceOrig * usdkrw : priceOrig;
+    const divPerShareKRW = currency === 'USD' && usdkrw ? div_per_share * usdkrw : div_per_share;
 
     return {
       ticker, name, target_pct, currency,
-      div_per_share: divPerShareKRW,  // 항상 KRW 기준으로 반환
-      div_per_share_orig: div_per_share, // 원래 통화 기준 (설정 화면용)
+      div_per_share: divPerShareKRW,
+      div_per_share_orig: div_per_share,
       div_months,
       shares,
-      price_orig: priceOrig,   // 원래 통화 (표시용)
-      price: priceKRW,         // KRW 환산 (계산용)
+      avg_price,
+      price_orig: priceOrig,
+      price: priceKRW,
       value: shares * priceKRW,
       current_pct: 0,
     };
@@ -141,6 +167,7 @@ function getPortfolio() {
     assets,
     total_value: total,
     usdkrw: usdkrw,
+    userData: userData,
     last_updated: new Date().toISOString(),
   };
 }
@@ -166,37 +193,55 @@ function fetchUSDKRW() {
   }
 }
 
-// Naver 실패 시 한국은행 Open API 시도 (별도 키 불필요)
 function getFallbackUSDKRW() {
   try {
     const url = 'https://m.stock.naver.com/api/forex/FX_USDKRW';
     const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
     const json = JSON.parse(res.getContentText());
     const rate = parseFloat(json?.closePrice?.replace(/,/g,'') || '0');
-    return rate > 500 ? rate : 1350; // 비정상값이면 기본값
+    return rate > 500 ? rate : 1350;
   } catch (e) {
-    return 1350; // 최후 fallback
+    return 1350;
   }
 }
 
-// ── Naver Finance 실시간 가격 조회 ──────────────────────────────
-function fetchNaverPrice(ticker) {
+// ── Naver Finance 실시간 가격 + 종목명 조회 ─────────────────────
+function fetchNaverData(ticker) {
   try {
     const url = `https://polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:${ticker}`;
     const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    if (res.getResponseCode() !== 200) return 0;
+    if (res.getResponseCode() !== 200) return { price: 0, name: null };
 
     const json  = JSON.parse(res.getContentText());
     const datas = json?.result?.areas?.[0]?.datas;
-    if (!datas?.length) return 0;
+    if (!datas?.length) return { price: 0, name: null };
 
-    const item = datas[0];
-    // nv = 현재가(장중), sv = 기준가(전일종가)
-    const raw = item.nv || item.sv || item.pv || item.closePrice || '0';
-    return parseFloat(String(raw).replace(/,/g, '')) || 0;
+    const item  = datas[0];
+    const raw   = item.nv || item.sv || item.pv || item.closePrice || '0';
+    const price = parseFloat(String(raw).replace(/,/g, '')) || 0;
+    // nm = 종목명 (네이버 API 표준 필드)
+    const name  = item.nm || item.itemName || item.stockName || null;
+    return { price, name };
   } catch (e) {
-    Logger.log(`[fetchNaverPrice] ${ticker}: ${e}`);
-    return 0;
+    Logger.log(`[fetchNaverData] ${ticker}: ${e}`);
+    return { price: 0, name: null };
+  }
+}
+
+// 하위 호환성용 래퍼
+function fetchNaverPrice(ticker) {
+  return fetchNaverData(ticker).price;
+}
+
+// ── Holdings 시트 avg_price 컬럼 자동 보완 ──────────────────────
+function ensureAvgPriceColumn(sheet) {
+  const rows = sheet.getDataRange().getValues();
+  if (!rows.length) return;
+  if (rows[0][2] !== 'avg_price') {
+    sheet.getRange(1, 3).setValue('avg_price');
+    for (let i = 1; i < rows.length; i++) {
+      if (!rows[i][2]) sheet.getRange(i + 1, 3).setValue(0);
+    }
   }
 }
 
@@ -204,6 +249,7 @@ function fetchNaverPrice(ticker) {
 function updateHoldings(updates) {
   const ss    = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(HOLDINGS_SHEET);
+  ensureAvgPriceColumn(sheet);
   const rows  = sheet.getDataRange().getValues();
 
   const map = {};
@@ -219,29 +265,68 @@ function updateHoldings(updates) {
   return { updated: updates.length };
 }
 
-// ── 보유수량 절대값 설정: [{ticker, shares}] ────────────────────────
+// ── 보유수량 + 평균단가 절대값 설정: [{ticker, shares, avg_price}] ──
 function setHoldings(updates) {
   const ss    = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(HOLDINGS_SHEET);
+  ensureAvgPriceColumn(sheet);
   const rows  = sheet.getDataRange().getValues();
 
   const map = {};
-  updates.forEach(u => { map[u.ticker] = Number(u.shares) || 0; });
+  updates.forEach(u => { map[u.ticker] = u; });
 
   for (let i = 1; i < rows.length; i++) {
     const ticker = String(rows[i][0]);
-    if (map[ticker] !== undefined) {
-      sheet.getRange(i + 1, 2).setValue(map[ticker]);
-    }
+    const u = map[ticker];
+    if (!u) continue;
+    sheet.getRange(i + 1, 2).setValue(Number(u.shares)    || 0);
+    sheet.getRange(i + 1, 3).setValue(Number(u.avg_price) || 0);
   }
   return { updated: updates.length };
 }
 
-// ── Yahoo Finance 배당 기록 프록시: tickers[] → {ticker: [{ym, amount, source}]} ──
+// ── UserData 조회 ────────────────────────────────────────────────
+function getUserDataObj() {
+  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(USERDATA_SHEET);
+  if (!sheet) return {};
+  const rows = sheet.getDataRange().getValues().slice(1);
+  const obj  = {};
+  rows.forEach(r => { if (r[0]) obj[String(r[0])] = r[1]; });
+  return obj;
+}
+
+// ── UserData 저장: { totalCashInvested: number, ... } ────────────
+function saveUserData(data) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(USERDATA_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(USERDATA_SHEET);
+    sheet.getRange('A1:B1').setValues([['key','value']]);
+    sheet.setFrozenRows(1);
+  }
+
+  const rows = sheet.getDataRange().getValues();
+  for (const [key, value] of Object.entries(data)) {
+    let found = false;
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) === key) {
+        sheet.getRange(i + 1, 2).setValue(value);
+        rows[i][1] = value;
+        found = true;
+        break;
+      }
+    }
+    if (!found) sheet.appendRow([key, value]);
+  }
+  return { saved: Object.keys(data).length };
+}
+
+// ── Yahoo Finance 배당 기록 프록시 ───────────────────────────────
 function getDividends(tickers) {
   const results = {};
   tickers.forEach(function(ticker) {
-    const isKR   = /^\d/.test(ticker);
+    const isKR    = /^\d/.test(ticker);
     const yTicker = isKR ? ticker + '.KS' : ticker.toUpperCase();
     try {
       const url = 'https://query1.finance.yahoo.com/v8/finance/chart/'
@@ -253,7 +338,7 @@ function getDividends(tickers) {
         && data.chart.result[0].events && data.chart.result[0].events.dividends;
       if (!divs) return;
       results[ticker] = Object.values(divs).map(function(d) {
-        const dt = new Date(d.date * 1000);
+        const dt   = new Date(d.date * 1000);
         const ym   = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
         const date = ym + '-' + String(dt.getDate()).padStart(2, '0');
         return { ym: ym, date: date, amount: d.amount, source: 'auto' };
@@ -265,7 +350,7 @@ function getDividends(tickers) {
   return results;
 }
 
-// ── 배당/통화 설정 업데이트: [{ticker, div_per_share, div_months, currency}] ──
+// ── 배당/통화/비중 설정 업데이트 ─────────────────────────────────
 function updateConfig(updates) {
   const ss    = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(CONFIG_SHEET);
@@ -281,6 +366,7 @@ function updateConfig(updates) {
     if (u.div_per_share !== undefined) sheet.getRange(i + 1, 4).setValue(u.div_per_share);
     if (u.div_months    !== undefined) sheet.getRange(i + 1, 5).setValue(u.div_months.join(','));
     if (u.currency      !== undefined) sheet.getRange(i + 1, 6).setValue(u.currency);
+    if (u.target_pct    !== undefined) sheet.getRange(i + 1, 3).setValue(u.target_pct);
   }
   return { updated: updates.length };
 }
